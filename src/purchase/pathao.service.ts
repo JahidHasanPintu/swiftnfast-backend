@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { PurchaseDocument } from './interfaces/puchase.interface';
@@ -10,6 +10,7 @@ export class PathaoService {
     @InjectModel('Purchases') private PurchaseModel: Model<PurchaseDocument>,
   ) {}
 
+  private readonly logger = new Logger(PathaoService.name);
   private accessToken: string | null = null;
   private tokenExpiry = 0;
 
@@ -111,7 +112,7 @@ export class PathaoService {
   // ── Single delivery ───────────────────────────────────────────────────
   async createSingleDelivery(orderId: string, orderItemIndex: number) {
     // Fetch purchase with customer info
-    console.log('checking store: ', process.env.PATHAO_STORE_ID);
+    this.logger.debug(`Pathao store id: ${process.env.PATHAO_STORE_ID}`);
     const purchaseData = await this.PurchaseModel.aggregate([
       {
         $match: {
@@ -213,7 +214,9 @@ export class PathaoService {
         payloadSent: payload,
       };
     } catch (err: any) {
-      console.log('PATHAO ERROR:', err?.response?.data || err);
+      this.logger.error(
+        `Pathao error: ${err?.response?.data?.message || err?.message || err}`,
+      );
 
       const msg = err?.response?.data?.message || 'Pathao API error';
 

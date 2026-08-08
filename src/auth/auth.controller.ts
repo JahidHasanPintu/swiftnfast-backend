@@ -2,11 +2,13 @@ import { BadRequestException, Body, Controller, Post } from '@nestjs/common';
 import { SignUpDto } from 'src/user/dto/signUp.dto';
 import { AuthService } from './auth.service';
 import { LoginDto } from 'src/user/dto/login.dto';
+import { Public } from 'src/common/decorators/public.decorator';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Public()
   @Post('signup')
   async signupApi(@Body() body: SignUpDto) {
     try {
@@ -19,6 +21,7 @@ export class AuthController {
     }
   }
 
+  @Public()
   @Post('signin')
   async signinApi(@Body() body: LoginDto) {
     try {

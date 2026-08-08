@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -18,6 +19,7 @@ import { AccountsModule } from './accounts/accounts.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { ShipmentModule } from './shipment/shipment.module';
 import { DropShipModule } from './dropship/dropship.module';
+import { GlobalJwtAuthGuard } from './common/guards/global-jwt-auth.guard';
 
 @Module({
   imports: [
@@ -43,6 +45,10 @@ import { DropShipModule } from './dropship/dropship.module';
 
   providers: [
     AppService,
+    {
+      provide: APP_GUARD,
+      useClass: GlobalJwtAuthGuard,
+    },
     // {
     //   provide: APP_FILTER,
     //   useClass: LoggingFilter,

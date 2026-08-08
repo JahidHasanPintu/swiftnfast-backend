@@ -26,7 +26,7 @@ export class AuthService {
       throw new ForbiddenException('Invalid username or password');
     }
 
-    if (!compare(body.password, user.password.toString())) {
+    if (!(await compare(body.password, user.password.toString()))) {
       throw new ForbiddenException('Invalid username or password');
     }
 

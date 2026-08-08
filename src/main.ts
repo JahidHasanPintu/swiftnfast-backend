@@ -1,15 +1,14 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { join } from 'path';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import * as dotenv from 'dotenv';
-import { NestExpressApplication } from '@nestjs/platform-express'; // Add this import
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 dotenv.config(); // Load environment variables from .env file
 
 async function bootstrap() {
-  // const app = await NestFactory.create(AppModule);
-
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   app.useGlobalPipes(
@@ -21,14 +20,28 @@ async function bootstrap() {
     }),
   );
 
-  app.enableCors();
+  // CORS: restrict origins via env (comma-separated); allow all when unset.
+  const corsOrigins = process.env.CORS_ORIGINS;
+  app.enableCors({
+    origin: corsOrigins ? corsOrigins.split(',').map((o) => o.trim()) : true,
+  });
 
   app.setViewEngine('hbs');
   app.setBaseViewsDir(join(__dirname, '..', 'views'));
 
+  // Swagger API docs at /api
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('SWIFTNFAST API')
+    .setDescription('SWIFTNFAST backend API')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('api', app, document);
+
   await app.listen(30003);
-  // await app.listen(3000);
-  console.log('server up and running hello');
-  console.log(`Application running at ${await app.getUrl()}`);
+  const logger = new Logger('Bootstrap');
+  logger.log('server up and running');
+  logger.log(`Application running at ${await app.getUrl()}`);
 }
 bootstrap();

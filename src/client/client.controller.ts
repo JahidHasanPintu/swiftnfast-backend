@@ -13,16 +13,19 @@ import { UserRegistrationDto } from './registration/client-reg.dto';
 import { UserLoginDto } from './login/login.dto';
 import { UserRegistration } from './registration/client-reg.model';
 import { UpdateUserDto } from './update/update-user.dto';
+import { Public } from 'src/common/decorators/public.decorator';
 
 @Controller('client')
 export class ClientController {
   constructor(private readonly clientService: ClientService) {}
 
+  @Public()
   @Post('register')
   async register(@Body() userRegistrationDto: UserRegistrationDto) {
     return this.clientService.register(userRegistrationDto);
   }
 
+  @Public()
   @Post('login')
   async login(@Body() userLoginDto: UserLoginDto) {
     return this.clientService.login(userLoginDto);
@@ -33,6 +36,7 @@ export class ClientController {
     return this.clientService.getAllUsers();
   }
 
+  @Public()
   @Get(':email')
   async findUserByEmail(@Param('email') email: string) {
     const user = await this.clientService.findUserByEmail(email);
