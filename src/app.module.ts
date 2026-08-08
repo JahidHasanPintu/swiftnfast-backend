@@ -20,6 +20,7 @@ import { TransactionsModule } from './transactions/transactions.module';
 import { ShipmentModule } from './shipment/shipment.module';
 import { DropShipModule } from './dropship/dropship.module';
 import { GlobalJwtAuthGuard } from './common/guards/global-jwt-auth.guard';
+import { StorefrontModule } from './storefront/storefront.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { GlobalJwtAuthGuard } from './common/guards/global-jwt-auth.guard';
     TransactionsModule,
     ShipmentModule,
     DropShipModule,
+    StorefrontModule,
   ],
   controllers: [AppController],
   // providers: [AppService],

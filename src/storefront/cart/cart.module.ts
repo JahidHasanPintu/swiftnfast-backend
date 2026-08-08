@@ -1,0 +1,13 @@
+import { Module } from '@nestjs/common';
+import { DatabaseSchemasModule } from 'src/database/schemas.module';
+import { StorefrontAuthModule } from '../auth/storefront-auth.module';
+import { CartService } from './cart.service';
+import { CartController } from './cart.controller';
+
+@Module({
+  imports: [DatabaseSchemasModule, StorefrontAuthModule],
+  controllers: [CartController],
+  providers: [CartService],
+  exports: [CartService],
+})
+export class CartModule {}
