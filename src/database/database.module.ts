@@ -4,7 +4,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 @Module({
 
     imports: [
-        MongooseModule.forRoot('mongodb+srv://mdmazharulhoque1993:inalyze@cluster0.woumqym.mongodb.net/pfu2-officials?retryWrites=true&w=majority', {
+        MongooseModule.forRoot(process.env.MONGODB_URI || 'mongodb+srv://mdmazharulhoque1993:inalyze@cluster0.woumqym.mongodb.net/pfu2-officials?retryWrites=true&w=majority', {
             // MongooseModule.forRoot('mongodb+srv://mdmazharulhoque1993:YHSGBKsuU0cPZCGB@cluster0.woumqym.mongodb.net/pfu2', {
             // useNewUrlParser: true,
             // useUnifiedTopology: true,

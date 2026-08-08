@@ -1,8 +1,8 @@
-import { Controller, Get, ParseIntPipe, Query } from '@nestjs/common';
+import { Controller, Get, ParseIntPipe, Query, Res } from '@nestjs/common';
 import { CustomerService } from './customer.service';
 import { CustomerDocument } from '../interfaces/customer.interface';
-import { SearchCustomerDto } from '../dtos/searchCustomer.dto';
 import { CommonPaginationResponse } from 'src/common/interfaces/CommonPaginationResponse';
+import { Response } from 'express';
 
 @Controller('customer')
 export class CustomerController {
@@ -15,11 +15,6 @@ export class CustomerController {
         return this.customerService.getAllCustomers();
     }
 
-    // @Get('search')
-    // async searchCustomers(@Query() query: SearchCustomerDto): Promise<CustomerDocument[]> {
-    //     return this.customerService.searchCustomers(query);
-    // }
-
     @Get('search')
     async searchCustomers(
       @Query('keyword') keyword: string,
@@ -31,8 +26,13 @@ export class CustomerController {
 
 
     @Get('xls/list')
-    async getAllCustomersForXLS(): Promise<CommonPaginationResponse<any>> {
-      return this.customerService.getAllCustomersForXLS();
+    async getAllCustomersForXLS(@Res() res: Response): Promise<void> {
+      const buffer = await this.customerService.getAllCustomersForXLS();
+      res.set({
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': 'attachment; filename="customers.xlsx"',
+      });
+      res.send(buffer);
     }
 
 }

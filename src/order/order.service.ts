@@ -11,6 +11,8 @@ import CustomerSchema from './schemas/customer.schema';
 import { CreateOrderRequestDto } from './dtos/createOrderRequest.dto';
 import { CommonPaginationResponse } from 'src/common/interfaces/CommonPaginationResponse';
 import * as mongoose from 'mongoose';
+import { normalizePhone } from 'src/utils/phone.util';
+import { buildCustomerDedupPipeline, extractDedupResult } from './customer/customer.aggregation';
 
 @Injectable()
 export class OrderService {
@@ -42,14 +44,10 @@ export class OrderService {
     session.startTransaction();
   
     try {
-      // Always create a new customer with a unique ObjectId, even if customerId is reused
-      const newCustomer = new this.customerModel({
-        ...customerInfo,
-        _id: new mongoose.Types.ObjectId(), // Always generate a new unique ObjectId
-      });
-  
-      await newCustomer.save({ session });
-      const customerObjectId = newCustomer._id;
+      // Reuse the existing customer for this phone number instead of creating
+      // a duplicate on every order (root cause of the double-customer bug).
+      const customer = await this.findOrCreateCustomer(customerInfo, session);
+      const customerObjectId = customer._id;
   
       // Create a unique order ID for each order
       const orderId = this.generateUniqueOrderId();
@@ -58,7 +56,7 @@ export class OrderService {
       const orderDocs = orders.map((order, index) => ({
         orderId, // Unique order ID for this order
         customerId: customerObjectId, // Use ObjectId for customerId
-        customerName: customerInfo.customerName,
+        customerName: customer.customerName,
         orderDate: customerInfo.orderDate,
         createdBy: customerInfo.createdBy,
         orderItemIndex: index + 1, // Add the orderItemIndex
@@ -102,6 +100,59 @@ export class OrderService {
       throw new BadRequestException(`Error creating order: ${error.message}`);
     }
   }
+
+  /**
+   * Finds the customer for a contact number, or creates one if none exists.
+   * Returns the existing customer instead of inserting a duplicate.
+   * Optional info (name/address/email) is refreshed on the canonical record.
+   */
+  private async findOrCreateCustomer(
+    customerInfo: CreateCustomerDto,
+    session?: mongoose.ClientSession,
+  ): Promise<CustomerDocument> {
+    const rawPhone = customerInfo.contactNumber;
+    const normalizedPhone = normalizePhone(rawPhone);
+
+    let existing: CustomerDocument | null = null;
+
+    if (rawPhone) {
+      existing = await this.customerModel.findOne({ contactNumber: rawPhone }).session(session);
+    }
+
+    // Fallback for the same number written in a different format
+    // (e.g. '8801...' instead of '01...').
+    if (!existing && normalizedPhone && normalizedPhone !== rawPhone) {
+      existing = await this.customerModel.findOne({ contactNumber: normalizedPhone }).session(session);
+    }
+
+    if (existing) {
+      const changed: Partial<CustomerDocument> = {};
+      if (customerInfo.customerName && customerInfo.customerName !== existing.customerName) {
+        changed.customerName = customerInfo.customerName;
+      }
+      if (customerInfo.emailAddress && customerInfo.emailAddress !== existing.emailAddress) {
+        changed.emailAddress = customerInfo.emailAddress;
+      }
+      if (customerInfo.shippingAddress && customerInfo.shippingAddress !== existing.shippingAddress) {
+        changed.shippingAddress = customerInfo.shippingAddress;
+      }
+      if (customerInfo.districtName && customerInfo.districtName !== existing.districtName) {
+        changed.districtName = customerInfo.districtName;
+      }
+      if (Object.keys(changed).length > 0) {
+        Object.assign(existing, changed);
+        await existing.save({ session });
+      }
+      return existing;
+    }
+
+    const newCustomer = new this.customerModel({
+      ...customerInfo,
+      _id: new mongoose.Types.ObjectId(),
+    });
+    await newCustomer.save({ session });
+    return newCustomer;
+  }
   
   
 
@@ -119,21 +170,18 @@ export class OrderService {
     page = 1,
     pageSize = 10,
   ): Promise<CommonPaginationResponse<any>> {
-    const skip = (page - 1) * pageSize;
-    const count = await this.customerModel.countDocuments();
-    const customers = await this.customerModel
-      .find()
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(pageSize);
+    const result = await this.customerModel.aggregate(
+      buildCustomerDedupPipeline({}, page, pageSize),
+    );
+    const { customers, totalItems } = extractDedupResult(result);
 
     return {
       data: customers,
       meta: {
         page,
         pageSize,
-        totalItems: count,
-        totalPages: Math.ceil(count / pageSize),
+        totalItems,
+        totalPages: Math.ceil(totalItems / pageSize),
       },
     };
   }
