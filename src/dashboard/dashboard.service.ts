@@ -135,10 +135,10 @@ export class DashboardService {
     // Total Customers
     const totalCustomers = await this.customerModel.countDocuments(dateFilter);
 
-    // New Customers (this period)
+    // New Customers (this period) — no date filter means all-time (all customers)
     const newCustomers = dateFilter.createdAt
       ? await this.customerModel.countDocuments(dateFilter)
-      : 0;
+      : totalCustomers;
 
     // Total Purchases
     const totalPurchases = await this.purchaseModel.countDocuments(
@@ -218,6 +218,7 @@ export class DashboardService {
           count: { $sum: 1 },
         },
       },
+      { $match: { _id: { $ne: 'Cancelled' } } },
     ]);
 
     const cancelledCount = await this.cancelledOrderModel.countDocuments(
@@ -229,7 +230,7 @@ export class DashboardService {
       count: item.count,
     }));
 
-    // Add cancelled orders
+    // Cancelled orders are tracked in their own collection — single source
     if (cancelledCount > 0) {
       result.push({
         status: 'Cancelled',
@@ -269,13 +270,10 @@ export class DashboardService {
     const dateFilter = this.getDateFilter(startDate, endDate);
 
     const result = await this.orderModel.aggregate([
-      { $match: dateFilter },
+      { $match: { ...dateFilter, customerId: { $ne: null } } },
       {
         $group: {
-          _id: {
-            customerId: '$customerId',
-            customerName: '$customerName',
-          },
+          _id: '$customerId',
           totalSpent: { $sum: '$totalPrice' },
           orderCount: { $sum: 1 },
         },
@@ -284,12 +282,26 @@ export class DashboardService {
       { $limit: limit },
     ]);
 
-    return result.map((item) => ({
-      customerId: item._id.customerId,
-      customerName: item._id.customerName,
-      totalSpent: item.totalSpent,
-      orders: item.orderCount,
-    }));
+    const ids = result.map((item) => item._id).filter(Boolean);
+    const customers = ids.length
+      ? await this.customerModel
+          .find({ _id: { $in: ids } })
+          .select('customerName')
+          .lean()
+          .exec()
+      : [];
+
+    return result.map((item) => {
+      const customer = customers.find(
+        (c: any) => c._id.toString() === item._id.toString(),
+      );
+      return {
+        customerId: item._id,
+        customerName: customer?.customerName || 'Unknown',
+        totalSpent: item.totalSpent,
+        orders: item.orderCount,
+      };
+    });
   }
 
   async getSalesByCountry(startDate?: string, endDate?: string) {
