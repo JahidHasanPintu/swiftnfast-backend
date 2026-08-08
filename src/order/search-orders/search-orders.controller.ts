@@ -1,6 +1,14 @@
-import { Controller, Get, Query, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Query,
+  ParseIntPipe,
+  UseGuards,
+} from '@nestjs/common';
 import { SearchOrdersService } from './search-orders.service';
+import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 
+@UseGuards(JwtAuthGuard)
 @Controller('search-orders')
 export class SearchOrdersController {
   constructor(private readonly searchOrderService: SearchOrdersService) {}

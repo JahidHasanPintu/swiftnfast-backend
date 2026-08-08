@@ -38,7 +38,9 @@ export class ClientService {
       userType,
       password: hashedPassword,
     });
-    return user.save();
+    const saved = await user.save();
+    const { password: _pw, ...safeUser } = saved.toObject();
+    return safeUser as unknown as UserRegistration;
   }
 
   private async hashPassword(password: string): Promise<string> {
@@ -58,7 +60,8 @@ export class ClientService {
       throw new NotFoundException('Invalid credentials');
     }
     const token = this.generateToken(user);
-    return { user, token };
+    const { password: _pw, ...safeUser } = user.toObject();
+    return { user: safeUser as unknown as UserRegistration, token };
   }
 
   private async verifyPassword(
@@ -79,11 +82,11 @@ export class ClientService {
   }
 
   async getAllUsers(): Promise<UserRegistration[]> {
-    return this.userModel.find().exec();
+    return this.userModel.find().select('-password -__v').exec();
   }
 
   async findUserByEmail(email: string): Promise<UserRegistration | null> {
-    return this.userModel.findOne({ email }).exec();
+    return this.userModel.findOne({ email }).select('-password -__v').exec();
   }
 
   async updateUser(
@@ -111,6 +114,7 @@ export class ClientService {
 
     const updatedUser = await this.userModel
       .findByIdAndUpdate(id, updateUserDto, { new: true })
+      .select('-password -__v')
       .exec();
 
     if (!updatedUser) {

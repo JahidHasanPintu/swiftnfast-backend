@@ -9,14 +9,17 @@ import {
   Put,
   Query,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import { CommonPaginationResponse } from 'src/common/interfaces/CommonPaginationResponse';
 import { CreateOrderRequestDto } from './dtos/createOrderRequest.dto';
 import { CustomerDocument } from './interfaces/customer.interface';
 import { OrderService } from './order.service';
 import { InvoiceService } from 'src/invoice/invoice.service';
+import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { Response } from 'express';
 
+@UseGuards(JwtAuthGuard)
 @Controller('orders')
 export class OrderController {
   constructor(

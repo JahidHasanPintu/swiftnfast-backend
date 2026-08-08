@@ -1,8 +1,17 @@
-import { Controller, Get, ParseIntPipe, Query, Res } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  ParseIntPipe,
+  Query,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { CustomerService } from './customer.service';
 import { CommonPaginationResponse } from 'src/common/interfaces/CommonPaginationResponse';
+import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { Response } from 'express';
 
+@UseGuards(JwtAuthGuard)
 @Controller('customer')
 export class CustomerController {
   constructor(private readonly customerService: CustomerService) {}

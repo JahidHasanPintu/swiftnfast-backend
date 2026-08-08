@@ -1,7 +1,7 @@
-import { ForbiddenException, Injectable, Post } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { SignUpDto } from 'src/user/dto/signUp.dto';
 import { UserService } from 'src/user/user.service';
-import { hashSync, compare } from 'bcrypt';
+import { compare } from 'bcrypt';
 import { LoginDto } from 'src/user/dto/login.dto';
 import { sign } from 'jsonwebtoken';
 import { ConfigService } from '@nestjs/config';
@@ -14,10 +14,9 @@ export class AuthService {
   ) {}
 
   signupUser(payload: SignUpDto) {
-    return this.userService.create({
-      ...payload,
-      password: hashSync(payload.password, 8),
-    });
+    // userService.create hashes the password exactly once (bcrypt, rounds 10).
+    // Hashing here too caused a double-hash so signin always failed.
+    return this.userService.create(payload);
   }
 
   async signin(body: LoginDto) {
