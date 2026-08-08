@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateCustomerDto } from './dtos/createCustomer.dto';
 import { CreateOrderDto } from './dtos/createOrders.dto';
 import { CreatePaymentDto } from './dtos/createPayment.dto';
@@ -7,12 +11,17 @@ import { Connection, Model } from 'mongoose';
 import { CustomerDocument } from './interfaces/customer.interface';
 import { OrderDocument } from './interfaces/order.interface';
 import { PaymentDocument } from './interfaces/payment.interface';
-import CustomerSchema from './schemas/customer.schema';
-import { CreateOrderRequestDto } from './dtos/createOrderRequest.dto';
 import { CommonPaginationResponse } from 'src/common/interfaces/CommonPaginationResponse';
 import * as mongoose from 'mongoose';
 import { normalizePhone } from 'src/utils/phone.util';
-import { buildCustomerDedupPipeline, extractDedupResult } from './customer/customer.aggregation';
+import {
+  buildCustomerDedupPipeline,
+  extractDedupResult,
+} from './customer/customer.aggregation';
+import {
+  buildOrderGroupingStages,
+  buildDistinctOrderCountStages,
+} from './order.aggregations';
 
 @Injectable()
 export class OrderService {
@@ -34,33 +43,34 @@ export class OrderService {
     return uniqueId;
   }
 
-   // Create orders
-   async createOrder(
+  // Create orders
+  async createOrder(
     customerInfo: CreateCustomerDto,
     orders: CreateOrderDto[],
     payments: CreatePaymentDto,
   ) {
     const session = await this.customerModel.db.startSession();
     session.startTransaction();
-  
+
     try {
       // Reuse the existing customer for this phone number instead of creating
       // a duplicate on every order (root cause of the double-customer bug).
       const customer = await this.findOrCreateCustomer(customerInfo, session);
       const customerObjectId = customer._id;
-  
+
       // Create a unique order ID for each order
       const orderId = this.generateUniqueOrderId();
-  
+
       // Process and save orders, ensuring all fields are included
       const orderDocs = orders.map((order, index) => ({
         orderId, // Unique order ID for this order
+        customer: customerObjectId, // Ref for populate('customer')
         customerId: customerObjectId, // Use ObjectId for customerId
         customerName: customer.customerName,
         orderDate: customerInfo.orderDate,
         createdBy: customerInfo.createdBy,
         orderItemIndex: index + 1, // Add the orderItemIndex
-  
+
         // Ensure these fields are included
         productUrl: order.productUrl,
         quantity: order.quantity,
@@ -77,23 +87,27 @@ export class OrderService {
         websiteUrl: order.websiteUrl, // Website URL
         status: 'Pending', // Default to Pending if not provided
       }));
-  
+
       await this.orderModel.insertMany(orderDocs, { session });
-  
+
       // Process and save payment
       const paymentDoc = new this.paymentModel({
         ...payments,
         orderId, // Use the same orderId for the payment
         customerId: customerObjectId, // Link payment to customer
       });
-  
+
       await paymentDoc.save({ session });
-  
+
       // Commit the transaction
       await session.commitTransaction();
       session.endSession();
-  
-      return { message: 'Orders created successfully', orders: orderDocs, payment: paymentDoc };
+
+      return {
+        message: 'Orders created successfully',
+        orders: orderDocs,
+        payment: paymentDoc,
+      };
     } catch (error) {
       await session.abortTransaction();
       session.endSession();
@@ -116,27 +130,43 @@ export class OrderService {
     let existing: CustomerDocument | null = null;
 
     if (rawPhone) {
-      existing = await this.customerModel.findOne({ contactNumber: rawPhone }).session(session);
+      existing = await this.customerModel
+        .findOne({ contactNumber: rawPhone })
+        .session(session);
     }
 
     // Fallback for the same number written in a different format
     // (e.g. '8801...' instead of '01...').
     if (!existing && normalizedPhone && normalizedPhone !== rawPhone) {
-      existing = await this.customerModel.findOne({ contactNumber: normalizedPhone }).session(session);
+      existing = await this.customerModel
+        .findOne({ contactNumber: normalizedPhone })
+        .session(session);
     }
 
     if (existing) {
       const changed: Partial<CustomerDocument> = {};
-      if (customerInfo.customerName && customerInfo.customerName !== existing.customerName) {
+      if (
+        customerInfo.customerName &&
+        customerInfo.customerName !== existing.customerName
+      ) {
         changed.customerName = customerInfo.customerName;
       }
-      if (customerInfo.emailAddress && customerInfo.emailAddress !== existing.emailAddress) {
+      if (
+        customerInfo.emailAddress &&
+        customerInfo.emailAddress !== existing.emailAddress
+      ) {
         changed.emailAddress = customerInfo.emailAddress;
       }
-      if (customerInfo.shippingAddress && customerInfo.shippingAddress !== existing.shippingAddress) {
+      if (
+        customerInfo.shippingAddress &&
+        customerInfo.shippingAddress !== existing.shippingAddress
+      ) {
         changed.shippingAddress = customerInfo.shippingAddress;
       }
-      if (customerInfo.districtName && customerInfo.districtName !== existing.districtName) {
+      if (
+        customerInfo.districtName &&
+        customerInfo.districtName !== existing.districtName
+      ) {
         changed.districtName = customerInfo.districtName;
       }
       if (Object.keys(changed).length > 0) {
@@ -152,18 +182,6 @@ export class OrderService {
     });
     await newCustomer.save({ session });
     return newCustomer;
-  }
-  
-  
-
-  
-  
-  
-
-  // get all orders based on their order id
-  async getOrdersGroupedByOrderId() {
-    const orders = await this.orderModel.find().sort({ createdAt: -1 });
-    return orders;
   }
 
   async getAllCustomers(
@@ -186,159 +204,46 @@ export class OrderService {
     };
   }
 
- 
-
-
-
-  
-  // new one 
+  // new one
 
   async getAllOrders(
     page = 1,
     pageSize = 10,
-    status?: string
+    status?: string,
   ): Promise<CommonPaginationResponse<any>> {
     const skip = (page - 1) * pageSize;
     const matchQuery: any = {};
     if (status) {
       matchQuery['status'] = status;
     }
-  
-    const [count, uniqueOrders] = await Promise.all([
-      this.orderModel.countDocuments(matchQuery),
-      this.orderModel.aggregate([
-        { $match: matchQuery },
-        // First group by orderId to get all items for each order
-        {
-          $group: {
-            _id: '$orderId',
-            orders: { $push: '$$ROOT' },
-            latestOrder: { $first: '$$ROOT' }
-          }
+
+    const [result] = await this.orderModel.aggregate([
+      { $match: matchQuery },
+      {
+        $facet: {
+          data: [
+            ...buildOrderGroupingStages(),
+            { $sort: { createdAt: -1 } },
+            { $skip: skip },
+            { $limit: pageSize },
+          ],
+          totalCount: buildDistinctOrderCountStages(),
         },
-        // Add a new field with the calculated status
-        {
-          $addFields: {
-            calculatedStatus: {
-              $cond: {
-                if: { $in: ['Pending', '$orders.status'] },
-                then: 'Pending',
-                else: {
-                  $cond: {
-                    if: {
-                      $and: [
-                        { $in: ['Cancelled', '$orders.status'] },
-                        { $not: { $in: ['Pending', '$orders.status'] } }
-                      ]
-                    },
-                    then: 'Cancelled',
-                    else: 'Purchased'
-                  }
-                }
-              }
-            }
-          }
-        },
-        // Lookup and other stages remain the same
-        {
-          $lookup: {
-            from: 'customers',
-            let: { customerId: '$latestOrder.customerId', orderId: '$_id' },
-            pipeline: [
-              {
-                $match: {
-                  $expr: {
-                    $or: [
-                      { $eq: ['$_id', '$$customerId'] },
-                      { $eq: ['$orderId', '$$orderId'] },
-                    ],
-                  },
-                },
-              },
-              {
-                $project: {
-                  customerId: 1,
-                  customerName: 1,
-                  contactNumber: 1,
-                  emailAddress: 1,
-                  shippingAddress: 1,
-                  districtName: 1,
-                  totalAdvance: 1,
-                  grandTotal: 1,
-                  sourceOfOrder: 1,
-                },
-              },
-            ],
-            as: 'customer',
-          },
-        },
-        {
-          $unwind: {
-            path: '$customer',
-            preserveNullAndEmptyArrays: true,
-          },
-        },
-        {
-          $replaceRoot: {
-            newRoot: {
-              $mergeObjects: [
-                {
-                  orderId: '$_id',
-                  _id: '$latestOrder._id',
-                  customerId: '$latestOrder.customerId',
-                  customerName: '$latestOrder.customerName',
-                  orderDate: '$latestOrder.orderDate',
-                  isPurchased: '$latestOrder.isPurchased',
-                  orderItemIndex: '$latestOrder.orderItemIndex',
-                  productUrl: '$latestOrder.productUrl',
-                  quantity: '$latestOrder.quantity',
-                  couponCode: '$latestOrder.couponCode',
-                  prodDesc: '$latestOrder.prodDesc',
-                  color: '$latestOrder.color',
-                  size: '$latestOrder.size',
-                  origin: '$latestOrder.origin',
-                  uniPrice: '$latestOrder.uniPrice',
-                  totalPrice: '$latestOrder.totalPrice',
-                  advancePayment: '$latestOrder.advancePayment',
-                  remainingAmount: '$latestOrder.remainingAmount',
-                  orderNotes: '$latestOrder.orderNotes',
-                  websiteUrl: '$latestOrder.websiteUrl',
-                  status: '$calculatedStatus',
-                  createdBy: '$latestOrder.createdBy',
-                  createdAt: '$latestOrder.createdAt',
-                  updatedAt: '$latestOrder.updatedAt',
-                  customer: { $ifNull: ['$customer', null] },
-                }
-              ]
-            }
-          }
-        },
-        { $sort: { createdAt: -1 } },
-        { $skip: skip },
-        { $limit: pageSize },
-      ]),
+      },
     ]);
-  
+
+    const totalItems = result?.totalCount?.[0]?.count ?? 0;
+
     return {
-      data: uniqueOrders,
+      data: result?.data ?? [],
       meta: {
         page,
         pageSize,
-        totalItems: count,
-        totalPages: Math.ceil(count / pageSize),
+        totalItems,
+        totalPages: Math.ceil(totalItems / pageSize),
       },
     };
   }
-  
-  
-  
-  
-  
-
-  // async getOrdersByOrderId(orderId: string): Promise<OrderDocument[]> {
-  //   const orders = await this.orderModel.find({ orderId }).exec();
-  //   return orders;
-  // }
 
   async getOrderItem(
     orderId: string,
@@ -368,7 +273,7 @@ export class OrderService {
         {
           $set: {
             status: newStatus,
-            isPurchased: false,
+            isPurchased: newStatus === 'Purchased',
           },
         },
         { new: true },
@@ -384,17 +289,10 @@ export class OrderService {
     return order;
   }
 
-  // bulk cnacel of orders
+  // bulk cancel of orders
 
   async updateBulkStatusOrder(orderId: string): Promise<void> {
     // Update all orders with the given orderId
-    await this.orderModel.updateMany(
-      { orderId },
-      { status: 'Cancelled', isPurchased: false },
-    );
-  }
-
-  async cancelOrdersByOrderId(orderId: string): Promise<void> {
     await this.orderModel.updateMany(
       { orderId },
       { status: 'Cancelled', isPurchased: false },
@@ -408,57 +306,32 @@ export class OrderService {
     return customer;
   }
 
-
-  
-
-
-  async getCustomerByOrderIdToFetch(orderId: string): Promise<CustomerDocument | null> {
-    console.log('Fetching order with orderId:', orderId);
-  
-    // Fetch the associated order by orderId to get the customerId
+  async getCustomerByOrderIdToFetch(
+    orderId: string,
+  ): Promise<CustomerDocument | null> {
     const order = await this.orderModel.findOne({ orderId }).exec();
-  
+
     if (!order) {
-      console.error(`Order not found for orderId: ${orderId}`);
       throw new NotFoundException('Order not found');
     }
-  
-    console.log('Order found:', order);  // Log the order details
-  
-    let customer = null;
-  
-    // Check if customerId is available in the order
+
     if (order.customerId) {
-      console.log(`Fetching customer with customerId: ${order.customerId}`);
-  
-      // Fetch customer by customerId (ObjectId in new schema)
-      customer = await this.customerModel.findOne({ _id: order.customerId }).exec();
-  
+      const customer = await this.customerModel
+        .findOne({ _id: order.customerId })
+        .exec();
       if (customer) {
-        console.log('Customer found by customerId:', customer);
         return customer;
-      } else {
-        console.log('No customer found by customerId, falling back to orderId.');
       }
     }
-  
-    // Fallback to checking if the orderId exists in the customer collection (older orders)
-    customer = await this.customerModel.findOne({ orderId }).exec();
-  
+
+    const customer = await this.customerModel.findOne({ orderId }).exec();
+
     if (!customer) {
-      console.error(`Customer not found for orderId: ${orderId}`);
       throw new NotFoundException('Customer not found');
     }
-  
-    console.log('Customer found by orderId:', customer);  // Log the customer details
+
     return customer;
   }
-  
-  
-  
-  
-  
-
 
   // get customer with customer id
   async getCustomerByCustomerId(
@@ -484,57 +357,50 @@ export class OrderService {
     return await this.customerModel.findOne({ contactNumber }).exec();
   }
 
-  /// delete order with orderId along with update of customer table info 
-
-  // async deleteOrderItem(
-  //   orderId: string,
-  //   orderItemIndex: number,
-  // ): Promise<void> {
-  //   // Find and delete the order item with the provided orderId and orderItemIndex
-  //   const result = await this.orderModel.deleteOne({ orderId, orderItemIndex });
-
-  //   // If no document matched the query, throw NotFoundException
-  //   if (result.deletedCount === 0) {
-  //     throw new NotFoundException('Order item not found');
-  //   }
-  // }
-
-
-  async deleteOrderItem(orderId: string, orderItemIndex: number): Promise<void> {
+  async deleteOrderItem(
+    orderId: string,
+    orderItemIndex: number,
+  ): Promise<void> {
     const session = await this.connection.startSession(); // Start MongoDB transaction
     session.startTransaction();
-  
+
     try {
       // Step 1: Find the order item to be deleted
-      const order = await this.orderModel.findOne({ orderId, orderItemIndex }).session(session);
+      const order = await this.orderModel
+        .findOne({ orderId, orderItemIndex })
+        .session(session);
       if (!order) {
         throw new NotFoundException('Order item not found');
       }
-  
+
       // Step 2: Retrieve order details for recalculation
       const { customerId, totalPrice, advancePayment } = order;
-  
+
       // Step 3: Delete the order item
-      const result = await this.orderModel.deleteOne({ orderId, orderItemIndex }).session(session);
+      const result = await this.orderModel
+        .deleteOne({ orderId, orderItemIndex })
+        .session(session);
       if (result.deletedCount === 0) {
         throw new NotFoundException('Order item not found');
       }
-  
+
       // Step 4: Find the customer and update their totals
-      const customer = await this.customerModel.findById(customerId).session(session);
+      const customer = await this.customerModel
+        .findById(customerId)
+        .session(session);
       if (!customer) {
         throw new NotFoundException(`Customer with ID ${customerId} not found`);
       }
-  
+
       customer.grandTotal -= totalPrice;
       customer.totalAdvance -= advancePayment;
-  
+
       // Ensure totals don't go below zero
       customer.grandTotal = Math.max(0, customer.grandTotal);
       customer.totalAdvance = Math.max(0, customer.totalAdvance);
-  
+
       await customer.save({ session }); // Save updated customer
-  
+
       // Commit the transaction
       await session.commitTransaction();
     } catch (error) {
@@ -544,8 +410,6 @@ export class OrderService {
       session.endSession(); // End session
     }
   }
-
-  
 
   async getUniqueCustomers(): Promise<CustomerDocument[]> {
     const uniqueCustomers = await this.customerModel.aggregate([
@@ -575,36 +439,33 @@ export class OrderService {
     return uniqueCustomers;
   }
 
-
-
-  async deleteOrdersByOrderId(orderId: string): Promise<{ deletedCount: number }> {
+  async deleteOrdersByOrderId(
+    orderId: string,
+  ): Promise<{ deletedCount: number }> {
     return this.orderModel.deleteMany({ orderId }).exec();
-}
+  }
 
+  calculateInvoiceTotals(orders: OrderDocument[]): {
+    grandTotal: number;
+    totalAdvance: number;
+    totalOutstanding: number;
+  } {
+    let grandTotal = 0;
+    let totalAdvance = 0;
 
+    orders.forEach((order) => {
+      grandTotal += order.totalPrice || order.uniPrice * order.quantity; // Fallback if totalPrice isn’t set
+      totalAdvance += order.advancePayment || 0; // Default to 0 if not provided
+    });
 
-calculateInvoiceTotals(orders: OrderDocument[]): { grandTotal: number; totalAdvance: number; totalOutstanding: number } {
-  let grandTotal = 0;
-  let totalAdvance = 0;
+    const totalOutstanding = grandTotal - totalAdvance;
+    return { grandTotal, totalAdvance, totalOutstanding };
+  }
 
-  orders.forEach((order) => {
-    grandTotal += order.totalPrice || order.uniPrice * order.quantity; // Fallback if totalPrice isn’t set
-    totalAdvance += order.advancePayment || 0; // Default to 0 if not provided
-  });
-
-  const totalOutstanding = grandTotal - totalAdvance;
-  return { grandTotal, totalAdvance, totalOutstanding };
-}
-
-
-async getOrdersByOrderId(orderId: string): Promise<OrderDocument[]> {
-  return this.orderModel
-    .find({ orderId })
-    .populate('customer') // Populate customer details if available
-    .exec();
-}
-
-
-
-
+  async getOrdersByOrderId(orderId: string): Promise<OrderDocument[]> {
+    return this.orderModel
+      .find({ orderId })
+      .populate('customer') // Populate customer details if available
+      .exec();
+  }
 }

@@ -2,9 +2,9 @@ import * as mongoose from 'mongoose';
 
 export const OrderSchema = new mongoose.Schema(
   {
-    orderId: { type: String }, 
-    customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' }, 
-    customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' }, 
+    orderId: { type: String },
+    customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
+    customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
     customerName: { type: String },
     contactNo: { type: String },
     orderDate: { type: Date },
@@ -26,7 +26,14 @@ export const OrderSchema = new mongoose.Schema(
     websiteUrl: { type: String }, // Website
     status: {
       type: String,
-      enum: ['Purchased', 'Pending', 'Cancelled', 'Ready To Deliver', 'Shipped', 'Delivered'],
+      enum: [
+        'Purchased',
+        'Pending',
+        'Cancelled',
+        'Ready To Deliver',
+        'Shipped',
+        'Delivered',
+      ],
       default: 'Pending',
     },
     createdBy: { type: String },
@@ -36,9 +43,8 @@ export const OrderSchema = new mongoose.Schema(
   },
 );
 // Add the necessary indexes
-OrderSchema.index({ orderId: 1 });  // Index on orderId
-OrderSchema.index({ customerId: 1 });  // Index on customerId for faster lookups
-OrderSchema.index({ orderDate: -1 });  // Index on orderDate for faster sorting
+OrderSchema.index({ orderId: 1 }); // Index on orderId
+OrderSchema.index({ customerId: 1 }); // Index on customerId for faster lookups
+OrderSchema.index({ orderDate: -1 }); // Index on orderDate for faster sorting
 
 export default OrderSchema;
-export const Order = mongoose.model('Order', OrderSchema);
