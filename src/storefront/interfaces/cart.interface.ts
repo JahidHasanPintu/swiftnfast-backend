@@ -33,6 +33,8 @@ export interface Cart {
   pfu2Charge?: number;
   discount?: number;
   totalPrice?: number;
+  shippingAddress?: any;
+  billingAddress?: any;
   createdAt?: Date;
   updatedAt?: Date;
 }

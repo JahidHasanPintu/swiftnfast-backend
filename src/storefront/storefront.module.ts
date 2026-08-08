@@ -10,6 +10,7 @@ import { StorefrontUsersModule } from './users/storefront-users.module';
 import { CartModule } from './cart/cart.module';
 import { AddressModule } from './addresses/address.module';
 import { PaymentModule } from './payment/payment.module';
+import { StorefrontOrdersModule } from './orders/storefront-orders.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { PaymentModule } from './payment/payment.module';
     CartModule,
     AddressModule,
     PaymentModule,
+    StorefrontOrdersModule,
   ],
 })
 export class StorefrontModule {}

@@ -172,6 +172,18 @@ export class CartService {
     return this.enrich(cart);
   }
 
+  async getRawCart(id: string) {
+    const cart = await this.cartModel.findById(id).exec();
+    if (!cart) {
+      throw new NotFoundException('Cart not found');
+    }
+    return cart;
+  }
+
+  async deleteById(id: string) {
+    await this.cartModel.findByIdAndDelete(id).exec();
+  }
+
   async addItem(
     identity: { userId?: string; guestToken?: string },
     body: { productId: string; quantity: number; price: number; type?: string },

@@ -184,6 +184,44 @@ export class OrderService {
     return newCustomer;
   }
 
+  /**
+   * Public convenience wrapper for storefront/merged flows: dedupe-or-create a
+   * customer by phone (same canonical logic as the admin create-order flow).
+   */
+  async findOrCreateCustomerByContact(
+    contactNumber: string,
+    opts: {
+      name?: string;
+      email?: string;
+      shippingAddress?: string;
+      districtName?: string;
+      sourceOfOrder?: string;
+    } = {},
+    session?: mongoose.ClientSession,
+  ): Promise<CustomerDocument> {
+    const info: CreateCustomerDto = {
+      customerId: `SF-${Date.now()}-${Math.floor(Math.random() * 900) + 100}`,
+      customerName: opts.name || contactNumber || 'Guest',
+      contactNumber,
+      emailAddress: opts.email,
+      shippingAddress: opts.shippingAddress || 'N/A',
+      grandTotal: 0,
+      totalAdvance: 0,
+      sourceOfOrder: opts.sourceOfOrder || 'storefront',
+      districtName: opts.districtName || 'N/A',
+      customerJoiningDate: '',
+      customerDateOfBirth: '',
+      orderDate: '',
+    } as unknown as CreateCustomerDto;
+    return this.findOrCreateCustomer(info, session);
+  }
+
+  generateStorefrontOrderNumber(): string {
+    const timestamp = Date.now();
+    const random = Math.floor(Math.random() * 900) + 100;
+    return `ORD-${timestamp}-${random}`;
+  }
+
   async getAllCustomers(
     page = 1,
     pageSize = 10,

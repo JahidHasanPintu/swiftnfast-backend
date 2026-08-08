@@ -31,5 +31,6 @@ import { InvoiceService } from 'src/invoice/invoice.service';
     SearchOrdersService,
     InvoiceService,
   ],
+  exports: [OrderService],
 })
 export class OrderModule {}
