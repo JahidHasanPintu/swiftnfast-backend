@@ -1,0 +1,562 @@
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { CreateCustomerDto } from './dtos/createCustomer.dto';
+import { CreateOrderDto } from './dtos/createOrders.dto';
+import { CreatePaymentDto } from './dtos/createPayment.dto';
+import { InjectModel, InjectConnection } from '@nestjs/mongoose';
+import { Connection, Model } from 'mongoose';
+import { CustomerDocument } from './interfaces/customer.interface';
+import { OrderDocument } from './interfaces/order.interface';
+import { PaymentDocument } from './interfaces/payment.interface';
+import CustomerSchema from './schemas/customer.schema';
+import { CreateOrderRequestDto } from './dtos/createOrderRequest.dto';
+import { CommonPaginationResponse } from 'src/common/interfaces/CommonPaginationResponse';
+import * as mongoose from 'mongoose';
+
+@Injectable()
+export class OrderService {
+  constructor(
+    @InjectModel('Customer') private customerModel: Model<CustomerDocument>,
+    @InjectModel('Orders') private orderModel: Model<OrderDocument>,
+    @InjectModel('Payments') private paymentModel: Model<PaymentDocument>,
+    @InjectConnection() private readonly connection: Connection,
+  ) {}
+
+  generateUniqueOrderId(): string {
+    const randomDigits = Math.floor(1000 + Math.random() * 9000); // Generates a random 4-digit number
+    const today = new Date();
+    const year = today.getFullYear().toString().slice(-2);
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    // const uniqueId = `ORD-${randomDigits}${year}${month}${day}`;
+    const uniqueId = `ORD-${day}${month}${year}${randomDigits}`;
+    return uniqueId;
+  }
+
+   // Create orders
+   async createOrder(
+    customerInfo: CreateCustomerDto,
+    orders: CreateOrderDto[],
+    payments: CreatePaymentDto,
+  ) {
+    const session = await this.customerModel.db.startSession();
+    session.startTransaction();
+  
+    try {
+      // Always create a new customer with a unique ObjectId, even if customerId is reused
+      const newCustomer = new this.customerModel({
+        ...customerInfo,
+        _id: new mongoose.Types.ObjectId(), // Always generate a new unique ObjectId
+      });
+  
+      await newCustomer.save({ session });
+      const customerObjectId = newCustomer._id;
+  
+      // Create a unique order ID for each order
+      const orderId = this.generateUniqueOrderId();
+  
+      // Process and save orders, ensuring all fields are included
+      const orderDocs = orders.map((order, index) => ({
+        orderId, // Unique order ID for this order
+        customerId: customerObjectId, // Use ObjectId for customerId
+        customerName: customerInfo.customerName,
+        orderDate: customerInfo.orderDate,
+        createdBy: customerInfo.createdBy,
+        orderItemIndex: index + 1, // Add the orderItemIndex
+  
+        // Ensure these fields are included
+        productUrl: order.productUrl,
+        quantity: order.quantity,
+        couponCode: order.couponCode,
+        prodDesc: order.prodDesc, // Product Description
+        color: order.color,
+        size: order.size,
+        origin: order.origin,
+        uniPrice: order.uniPrice, // Unit Price
+        totalPrice: order.totalPrice,
+        advancePayment: order.advancePayment,
+        remainingAmount: order.remainingAmount,
+        orderNotes: order.orderNotes,
+        websiteUrl: order.websiteUrl, // Website URL
+        status: 'Pending', // Default to Pending if not provided
+      }));
+  
+      await this.orderModel.insertMany(orderDocs, { session });
+  
+      // Process and save payment
+      const paymentDoc = new this.paymentModel({
+        ...payments,
+        orderId, // Use the same orderId for the payment
+        customerId: customerObjectId, // Link payment to customer
+      });
+  
+      await paymentDoc.save({ session });
+  
+      // Commit the transaction
+      await session.commitTransaction();
+      session.endSession();
+  
+      return { message: 'Orders created successfully', orders: orderDocs, payment: paymentDoc };
+    } catch (error) {
+      await session.abortTransaction();
+      session.endSession();
+      throw new BadRequestException(`Error creating order: ${error.message}`);
+    }
+  }
+  
+  
+
+  
+  
+  
+
+  // get all orders based on their order id
+  async getOrdersGroupedByOrderId() {
+    const orders = await this.orderModel.find().sort({ createdAt: -1 });
+    return orders;
+  }
+
+  async getAllCustomers(
+    page = 1,
+    pageSize = 10,
+  ): Promise<CommonPaginationResponse<any>> {
+    const skip = (page - 1) * pageSize;
+    const count = await this.customerModel.countDocuments();
+    const customers = await this.customerModel
+      .find()
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(pageSize);
+
+    return {
+      data: customers,
+      meta: {
+        page,
+        pageSize,
+        totalItems: count,
+        totalPages: Math.ceil(count / pageSize),
+      },
+    };
+  }
+
+ 
+
+
+
+  
+  // new one 
+
+  async getAllOrders(
+    page = 1,
+    pageSize = 10,
+    status?: string
+  ): Promise<CommonPaginationResponse<any>> {
+    const skip = (page - 1) * pageSize;
+    const matchQuery: any = {};
+    if (status) {
+      matchQuery['status'] = status;
+    }
+  
+    const [count, uniqueOrders] = await Promise.all([
+      this.orderModel.countDocuments(matchQuery),
+      this.orderModel.aggregate([
+        { $match: matchQuery },
+        // First group by orderId to get all items for each order
+        {
+          $group: {
+            _id: '$orderId',
+            orders: { $push: '$$ROOT' },
+            latestOrder: { $first: '$$ROOT' }
+          }
+        },
+        // Add a new field with the calculated status
+        {
+          $addFields: {
+            calculatedStatus: {
+              $cond: {
+                if: { $in: ['Pending', '$orders.status'] },
+                then: 'Pending',
+                else: {
+                  $cond: {
+                    if: {
+                      $and: [
+                        { $in: ['Cancelled', '$orders.status'] },
+                        { $not: { $in: ['Pending', '$orders.status'] } }
+                      ]
+                    },
+                    then: 'Cancelled',
+                    else: 'Purchased'
+                  }
+                }
+              }
+            }
+          }
+        },
+        // Lookup and other stages remain the same
+        {
+          $lookup: {
+            from: 'customers',
+            let: { customerId: '$latestOrder.customerId', orderId: '$_id' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $or: [
+                      { $eq: ['$_id', '$$customerId'] },
+                      { $eq: ['$orderId', '$$orderId'] },
+                    ],
+                  },
+                },
+              },
+              {
+                $project: {
+                  customerId: 1,
+                  customerName: 1,
+                  contactNumber: 1,
+                  emailAddress: 1,
+                  shippingAddress: 1,
+                  districtName: 1,
+                  totalAdvance: 1,
+                  grandTotal: 1,
+                  sourceOfOrder: 1,
+                },
+              },
+            ],
+            as: 'customer',
+          },
+        },
+        {
+          $unwind: {
+            path: '$customer',
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $replaceRoot: {
+            newRoot: {
+              $mergeObjects: [
+                {
+                  orderId: '$_id',
+                  _id: '$latestOrder._id',
+                  customerId: '$latestOrder.customerId',
+                  customerName: '$latestOrder.customerName',
+                  orderDate: '$latestOrder.orderDate',
+                  isPurchased: '$latestOrder.isPurchased',
+                  orderItemIndex: '$latestOrder.orderItemIndex',
+                  productUrl: '$latestOrder.productUrl',
+                  quantity: '$latestOrder.quantity',
+                  couponCode: '$latestOrder.couponCode',
+                  prodDesc: '$latestOrder.prodDesc',
+                  color: '$latestOrder.color',
+                  size: '$latestOrder.size',
+                  origin: '$latestOrder.origin',
+                  uniPrice: '$latestOrder.uniPrice',
+                  totalPrice: '$latestOrder.totalPrice',
+                  advancePayment: '$latestOrder.advancePayment',
+                  remainingAmount: '$latestOrder.remainingAmount',
+                  orderNotes: '$latestOrder.orderNotes',
+                  websiteUrl: '$latestOrder.websiteUrl',
+                  status: '$calculatedStatus',
+                  createdBy: '$latestOrder.createdBy',
+                  createdAt: '$latestOrder.createdAt',
+                  updatedAt: '$latestOrder.updatedAt',
+                  customer: { $ifNull: ['$customer', null] },
+                }
+              ]
+            }
+          }
+        },
+        { $sort: { createdAt: -1 } },
+        { $skip: skip },
+        { $limit: pageSize },
+      ]),
+    ]);
+  
+    return {
+      data: uniqueOrders,
+      meta: {
+        page,
+        pageSize,
+        totalItems: count,
+        totalPages: Math.ceil(count / pageSize),
+      },
+    };
+  }
+  
+  
+  
+  
+  
+
+  // async getOrdersByOrderId(orderId: string): Promise<OrderDocument[]> {
+  //   const orders = await this.orderModel.find({ orderId }).exec();
+  //   return orders;
+  // }
+
+  async getOrderItem(
+    orderId: string,
+    orderItemIndex: number,
+  ): Promise<OrderDocument> {
+    const order = await this.orderModel
+      .findOne({ orderId, orderItemIndex: orderItemIndex }) // Specify the field name explicitly
+      .exec();
+
+    if (!order) {
+      throw new NotFoundException(
+        `Order with orderId ${orderId} and orderItemIndex ${orderItemIndex} not found.`,
+      );
+    }
+    return order;
+  }
+
+  // updating orders collection with order id when purchase is done
+  async updateOrderStatus(
+    orderId: string,
+    orderItemIndex: number,
+    newStatus: string,
+  ): Promise<OrderDocument> {
+    const order = await this.orderModel
+      .findOneAndUpdate(
+        { orderId, orderItemIndex }, // Update the query to include orderItemIndex
+        {
+          $set: {
+            status: newStatus,
+            isPurchased: false,
+          },
+        },
+        { new: true },
+      )
+      .exec();
+
+    if (!order) {
+      throw new NotFoundException(
+        `Order with orderId ${orderId} and orderItemIndex ${orderItemIndex} not found.`,
+      );
+    }
+
+    return order;
+  }
+
+  // bulk cnacel of orders
+
+  async updateBulkStatusOrder(orderId: string): Promise<void> {
+    // Update all orders with the given orderId
+    await this.orderModel.updateMany(
+      { orderId },
+      { status: 'Cancelled', isPurchased: false },
+    );
+  }
+
+  async cancelOrdersByOrderId(orderId: string): Promise<void> {
+    await this.orderModel.updateMany(
+      { orderId },
+      { status: 'Cancelled', isPurchased: false },
+    );
+  }
+
+  // get customer with order id
+
+  async getCustomerByOrderId(orderId: string): Promise<CustomerDocument[]> {
+    const customer = await this.customerModel.find({ orderId }).exec();
+    return customer;
+  }
+
+
+  
+
+
+  async getCustomerByOrderIdToFetch(orderId: string): Promise<CustomerDocument | null> {
+    console.log('Fetching order with orderId:', orderId);
+  
+    // Fetch the associated order by orderId to get the customerId
+    const order = await this.orderModel.findOne({ orderId }).exec();
+  
+    if (!order) {
+      console.error(`Order not found for orderId: ${orderId}`);
+      throw new NotFoundException('Order not found');
+    }
+  
+    console.log('Order found:', order);  // Log the order details
+  
+    let customer = null;
+  
+    // Check if customerId is available in the order
+    if (order.customerId) {
+      console.log(`Fetching customer with customerId: ${order.customerId}`);
+  
+      // Fetch customer by customerId (ObjectId in new schema)
+      customer = await this.customerModel.findOne({ _id: order.customerId }).exec();
+  
+      if (customer) {
+        console.log('Customer found by customerId:', customer);
+        return customer;
+      } else {
+        console.log('No customer found by customerId, falling back to orderId.');
+      }
+    }
+  
+    // Fallback to checking if the orderId exists in the customer collection (older orders)
+    customer = await this.customerModel.findOne({ orderId }).exec();
+  
+    if (!customer) {
+      console.error(`Customer not found for orderId: ${orderId}`);
+      throw new NotFoundException('Customer not found');
+    }
+  
+    console.log('Customer found by orderId:', customer);  // Log the customer details
+    return customer;
+  }
+  
+  
+  
+  
+  
+
+
+  // get customer with customer id
+  async getCustomerByCustomerId(
+    customerId: string,
+  ): Promise<CustomerDocument[]> {
+    const customer = await this.customerModel.find({ customerId }).exec();
+    return customer;
+  }
+
+  async getPaymentsByOrderId(orderId: string): Promise<PaymentDocument[]> {
+    return this.paymentModel.find({ orderId }).exec();
+  }
+
+  // new method
+
+  async getCustomerByName(customerName: string): Promise<CustomerDocument[]> {
+    return await this.customerModel.find({ customerName }).exec();
+  }
+
+  async getCustomerByContactNumber(
+    contactNumber: string,
+  ): Promise<CustomerDocument> {
+    return await this.customerModel.findOne({ contactNumber }).exec();
+  }
+
+  /// delete order with orderId along with update of customer table info 
+
+  // async deleteOrderItem(
+  //   orderId: string,
+  //   orderItemIndex: number,
+  // ): Promise<void> {
+  //   // Find and delete the order item with the provided orderId and orderItemIndex
+  //   const result = await this.orderModel.deleteOne({ orderId, orderItemIndex });
+
+  //   // If no document matched the query, throw NotFoundException
+  //   if (result.deletedCount === 0) {
+  //     throw new NotFoundException('Order item not found');
+  //   }
+  // }
+
+
+  async deleteOrderItem(orderId: string, orderItemIndex: number): Promise<void> {
+    const session = await this.connection.startSession(); // Start MongoDB transaction
+    session.startTransaction();
+  
+    try {
+      // Step 1: Find the order item to be deleted
+      const order = await this.orderModel.findOne({ orderId, orderItemIndex }).session(session);
+      if (!order) {
+        throw new NotFoundException('Order item not found');
+      }
+  
+      // Step 2: Retrieve order details for recalculation
+      const { customerId, totalPrice, advancePayment } = order;
+  
+      // Step 3: Delete the order item
+      const result = await this.orderModel.deleteOne({ orderId, orderItemIndex }).session(session);
+      if (result.deletedCount === 0) {
+        throw new NotFoundException('Order item not found');
+      }
+  
+      // Step 4: Find the customer and update their totals
+      const customer = await this.customerModel.findById(customerId).session(session);
+      if (!customer) {
+        throw new NotFoundException(`Customer with ID ${customerId} not found`);
+      }
+  
+      customer.grandTotal -= totalPrice;
+      customer.totalAdvance -= advancePayment;
+  
+      // Ensure totals don't go below zero
+      customer.grandTotal = Math.max(0, customer.grandTotal);
+      customer.totalAdvance = Math.max(0, customer.totalAdvance);
+  
+      await customer.save({ session }); // Save updated customer
+  
+      // Commit the transaction
+      await session.commitTransaction();
+    } catch (error) {
+      await session.abortTransaction(); // Rollback on error
+      throw error;
+    } finally {
+      session.endSession(); // End session
+    }
+  }
+
+  
+
+  async getUniqueCustomers(): Promise<CustomerDocument[]> {
+    const uniqueCustomers = await this.customerModel.aggregate([
+      {
+        $group: {
+          _id: {
+            customerName: '$customerName',
+            contactNumber: '$contactNumber',
+          },
+          customerId: { $first: '$customerId' },
+          orderId: { $first: '$orderId' },
+          customerName: { $first: '$customerName' },
+          contactNumber: { $first: '$contactNumber' },
+          emailAddress: { $first: '$emailAddress' },
+          shippingAddress: { $first: '$shippingAddress' },
+          districtName: { $first: '$districtName' },
+          totalAdvance: { $first: '$totalAdvance' },
+          grandTotal: { $first: '$grandTotal' },
+          sourceOfOrder: { $first: '$sourceOfOrder' },
+          customerDateOfBirth: { $first: '$customerDateOfBirth' },
+          customerJoiningDate: { $first: '$customerJoiningDate' },
+          orderDate: { $first: '$orderDate' },
+          createdBy: { $first: '$createdBy' },
+        },
+      },
+    ]);
+    return uniqueCustomers;
+  }
+
+
+
+  async deleteOrdersByOrderId(orderId: string): Promise<{ deletedCount: number }> {
+    return this.orderModel.deleteMany({ orderId }).exec();
+}
+
+
+
+calculateInvoiceTotals(orders: OrderDocument[]): { grandTotal: number; totalAdvance: number; totalOutstanding: number } {
+  let grandTotal = 0;
+  let totalAdvance = 0;
+
+  orders.forEach((order) => {
+    grandTotal += order.totalPrice || order.uniPrice * order.quantity; // Fallback if totalPrice isn’t set
+    totalAdvance += order.advancePayment || 0; // Default to 0 if not provided
+  });
+
+  const totalOutstanding = grandTotal - totalAdvance;
+  return { grandTotal, totalAdvance, totalOutstanding };
+}
+
+
+async getOrdersByOrderId(orderId: string): Promise<OrderDocument[]> {
+  return this.orderModel
+    .find({ orderId })
+    .populate('customer') // Populate customer details if available
+    .exec();
+}
+
+
+
+
+}

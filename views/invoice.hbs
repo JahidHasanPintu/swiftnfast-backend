@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice - {{orderNumber}}</title>
+    <style>
+        /* Your existing CSS remains unchanged */
+        body{
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 16px;
+            color:#010101;
+        }
+        /* ... rest of your CSS styles ... */
+    </style>
+</head>
+<body>
+    <table class="main-table">
+        <tr>
+            <td>
+                <table class="fluid">
+                    <tr>
+                        <td><img src="/images/logo.png" alt="Company Logo"></td>
+                        <td>
+                            <table class="fluid">
+                                <tr>
+                                    <td style="font-weight: bold;">Invoice #</td>
+                                    <td style="text-align: right;">{{invoiceNumber}}</td>
+                                </tr>
+                                <tr>
+                                    <td style="font-weight: bold;">Date</td>
+                                    <td style="text-align: right;">{{invoiceDate}}</td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 0px;">
+                <img style="width: 100%;" src="/images/invoice-banner.png" alt="Invoice Banner">
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <table class="fluid">
+                    <tr>
+                        <td>
+                            <h3>Invoice to:</h3>
+                            <h2>{{customerName}}</h2>
+                            <p class="graytext">
+                                {{customerAddress}}
+                            </p>
+                        </td>
+                        <td style="vertical-align: top; padding-top: 5px;">
+                            <table class="fluid">
+                                <tr>
+                                    <td style="font-weight: bold; padding: 10px 0px;">Order #</td>
+                                    <td style="text-align: right; padding: 10px 0px;">{{orderNumber}}</td>
+                                </tr>
+                                <tr>
+                                    <td style="font-weight: bold; padding: 10px 0px;">Customer ID</td>
+                                    <td style="text-align: right; padding: 10px 0px;">{{customerId}}</td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <table class="data-table">
+                    <tr>
+                        <th>Product Description</th>
+                        <th class="align-right">Price</th>
+                        <th class="align-right">Qty</th>
+                        <th class="align-right">Total</th>
+                        <th class="align-right">Advance</th>
+                        <th class="align-right">Outstanding</th>
+                    </tr>
+                    {{#each products}}
+                    <tr>
+                        <td>{{description}}</td>
+                        <td class="align-right">{{price}}</td>
+                        <td class="align-right">{{quantity}}</td>
+                        <td class="align-right">{{total}}</td>`
+                        <td class="align-right">{{advance}}</td>
+                        <td class="align-right">{{outstanding}}</td>
+                    </tr>
+                    {{/each}}
+                </table>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <table class="fluid">
+                    <tr>
+                        <td class="bold p-5">Total</td>
+                        <td style="text-align: right;" class="p-5">Tk {{totalAmount}} /=</td>
+                    </tr>
+                    <tr>
+                        <td class="bold p-5">Advance</td>
+                        <td style="text-align: right;" class="p-5">Tk {{advanceAmount}} /=</td>
+                    </tr>
+                    <tr>
+                        <td class="bold highlighted p-5">Outstanding</td>
+                        <td style="text-align: right;" class="highlighted p-5">Tk {{outstandingAmount}} /= <p class="note">+ Weight Charge *</p></td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <!-- Static Payment Info Section -->
+                <table class="fluid">
+                    <tr>
+                        <td>
+                            <h3 class="bold mt-20">Payment Info:</h3>
+                            <table class="fluid">
+                                <tr>
+                                    <td>Account #:</td>
+                                    <td class="align-right">123456798123456</td>
+                                </tr>
+                                <tr>
+                                    <td>A/C Name:</td>
+                                    <td class="align-right">PFU2</td>
+                                </tr>
+                                <tr>
+                                    <td>Bank Name:</td>
+                                    <td class="align-right">The City Bank Ltd</td>
+                                </tr>
+                                <tr>
+                                    <td>Bank Address:</td>
+                                    <td class="align-right">Gulshan avenue Branch, Dhaka 1213</td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <div class="weight-price-info">
+                                <p class="note">* Weight charge to be calculated once product reaches Bangladesh.</p>
+                                <table class="fluid">
+                                    <tr>
+                                        <td><span class="bold">USA</span> 180 Tk / 100 gm</td>
+                                        <td><span class="bold">UK</span> 120 Tk / 100 gm</td>
+                                        <td><span class="bold">UAE</span> 120 Tk / 100 gm</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+        <tr>
+            <td style="text-align: center; padding: 10px 0px;">
+                <p>Thank you for your order</p>
+            </td>
+        </tr>
+        <tr>
+            <td style="text-align: center; padding: 10px 0px 50px 0px; font-weight: bold; font-size: 13px;">
+                THIS INVOICE IS SYSTEM GENERATED AND DOES NOT REQUIRE ANY SIGNATORY
+            </td>
+        </tr>
+        <tr>
+            <td style="border-top: 1px solid #d1202b;">
+                <table class="fluid">
+                    <tr>
+                        <td style="text-align: center; padding: 20px 0px 10px 0px;">
+                            <p>
+                                09678-114411, 01613-333011 (whatsapp) | shop.pfu2@gmail.com | www.pfu2.com
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="text-align: center;">
+                            <a href="#" class="icon"><img src="/images/facebook.png" alt="facebook"></a>
+                            <a href="#" class="icon"><img src="/images/instagram.png" alt="instagram"></a>
+                            <a href="#" class="icon"><img src="/images/youtube.png" alt="youtube"></a>
+                            <a href="#" class="icon"><img src="/images/whatsapp.png" alt="whatsapp"></a>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
