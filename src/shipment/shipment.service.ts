@@ -19,6 +19,8 @@ import {
   ShippingAddressDocument,
 } from './shipment.types';
 import { DropShipDocument } from '../dropship/interfaces/dropship.interface';
+import { TransactionsService } from '../transactions/transactions.service';
+import { removeCurrencySymbols } from '../utils/currency.util';
 
 @Injectable()
 export class ShipmentService {
@@ -27,7 +29,8 @@ export class ShipmentService {
     @InjectModel('Purchases') private purchaseModel: Model<PurchaseDocument>,
     @InjectModel('DropShip') private dropshipModel: Model<DropShipDocument>,
     @InjectModel('shipping-address')
-    private shippingAddressModel: Model<ShippingAddressDocument>, // Inject your TransactionService / AccountsService here for auto expense creation // @Inject(forwardRef(() => TransactionsService)) // private transactionsService: TransactionsService,
+    private shippingAddressModel: Model<ShippingAddressDocument>,
+    private transactionsService: TransactionsService,
   ) {}
 
   // ─── CREATE ────────────────────────────────────────────────────────────────────
@@ -185,84 +188,6 @@ export class ShipmentService {
     return { shipment: updatedShipment, purchase };
   }
 
-  // ─── LINK DROP SHIP ORDER TO SHIPMENT ──────────────────────────────────────────
-
-  async linkDropShip(
-    shipmentId: string,
-    dropshipId: string,
-    dto?: { productWeight?: number; weightChargePerKg?: number },
-  ): Promise<{ shipment: ShipmentDocument; dropship: DropShipDocument }> {
-    const shipment = await this.findOne(shipmentId);
-
-    const dropship = await this.dropshipModel.findOne({ dropshipId }).exec();
-    if (!dropship) {
-      throw new NotFoundException(`Drop ship order ${dropshipId} not found`);
-    }
-
-    // If already in another shipment, subtract from that shipment
-    if (dropship.shipmentId && dropship.shipmentId.toString() !== shipmentId) {
-      await this.recalcShipmentTotals(dropship.shipmentId.toString());
-    }
-
-    dropship.shipmentId = new Types.ObjectId(shipmentId);
-
-    if (dto?.productWeight !== undefined) {
-      dropship.productWeight = dto.productWeight;
-    }
-    if (dto?.weightChargePerKg !== undefined) {
-      dropship.weightChargePerKg = dto.weightChargePerKg;
-    }
-    dropship.productWeightCharge = parseFloat(
-      (dropship.productWeight * dropship.weightChargePerKg).toFixed(2),
-    );
-
-    // If shipment cost already known, compute profit
-    if (shipment.actualWeightChargePerKg > 0) {
-      dropship.actualWeightChargePerKg = shipment.actualWeightChargePerKg;
-      dropship.weightChargeProfit = parseFloat(
-        (
-          (dropship.weightChargePerKg - shipment.actualWeightChargePerKg) *
-          dropship.productWeight
-        ).toFixed(2),
-      );
-    }
-
-    if (dropship.productWeightCharge > 0 && dropship.status === 'Pending') {
-      dropship.status = 'Ready To Deliver';
-    }
-
-    await dropship.save();
-
-    await this.recalcShipmentTotals(shipmentId);
-
-    const updatedShipment = await this.findOne(shipmentId);
-    return { shipment: updatedShipment, dropship };
-  }
-
-  // ─── UNLINK DROP SHIP ──────────────────────────────────────────────────────────
-
-  async unlinkDropShip(
-    shipmentId: string,
-    dropshipId: string,
-  ): Promise<ShipmentDocument> {
-    const dropship = await this.dropshipModel.findOne({
-      dropshipId,
-      shipmentId: new Types.ObjectId(shipmentId),
-    });
-
-    if (!dropship) {
-      throw new NotFoundException(
-        `Drop ship order ${dropshipId} not linked to this shipment`,
-      );
-    }
-
-    dropship.shipmentId = undefined;
-    await dropship.save();
-
-    await this.recalcShipmentTotals(shipmentId);
-    return this.findOne(shipmentId);
-  }
-
   // ─── BULK LINK PURCHASES ───────────────────────────────────────────────────────
 
   async bulkLinkPurchases(
@@ -351,20 +276,22 @@ export class ShipmentService {
     await this.recalcShipmentTotals(shipmentId);
 
     // ── Create Expense Transaction in Accounts Module ────────────────────────────
-    // Uncomment and wire up once TransactionsService is available:
-    //
-    // const expenseTx = await this.transactionsService.addExpense({
-    //   accountId: dto.accountId,
-    //   amount: dto.totalShippingCost,
-    //   category: 'Freight & Logistics',
-    //   subCategory: 'International Shipping',
-    //   description: `Shipping cost for ${shipment.shipmentName} — Agent: ${shipment.agentName}`,
-    //   date: new Date().toISOString(),
-    //   reference: shipment.shipmentName,
-    //   tags: ['shipment', shipment.country.toLowerCase(), 'agent-payment'],
-    // });
-    // shipment.shippingExpenseTransactionId = expenseTx._id;
-    // await shipment.save();
+    if (!shipment.shippingExpenseTransactionId) {
+      const expenseTx = await this.transactionsService.addExpense({
+        accountId: dto.accountId,
+        amount: dto.totalShippingCost,
+        category: 'Freight & Logistics',
+        subCategory: 'International Shipping',
+        description: `Shipping cost for ${shipment.shipmentName} — Agent: ${shipment.agentName}`,
+        date: new Date().toISOString(),
+        reference: shipment.shipmentName,
+        tags: ['shipment', shipment.country.toLowerCase(), 'agent-payment'],
+      });
+      shipment.shippingExpenseTransactionId = expenseTx._id;
+    }
+
+    // Persist the updated cost fields (pre-save hook recomputes profit figures)
+    await shipment.save();
 
     // Return fresh data
     return this.findOne(shipmentId);
@@ -392,69 +319,67 @@ export class ShipmentService {
     };
   }
 
-  // ─── GET DROP SHIP ORDERS FOR SHIPMENT ─────────────────────────────────────────
-
-  async getLinkedDropShipOrders(shipmentId: string, page = 1, limit = 50) {
-    const skip = (page - 1) * limit;
-
-    const [items, total] = await Promise.all([
-      this.dropshipModel
-        .find({ shipmentId: new Types.ObjectId(shipmentId) })
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit),
-      this.dropshipModel.countDocuments({
-        shipmentId: new Types.ObjectId(shipmentId),
-      }),
-    ]);
-
-    return {
-      data: items,
-      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
-    };
-  }
-
   // ─── ANALYTICS FOR A SHIPMENT ──────────────────────────────────────────────────
 
   async getShipmentAnalytics(shipmentId: string) {
     const shipment = await this.findOne(shipmentId);
+    const shipmentObjId = new Types.ObjectId(shipmentId);
 
-    // Break down by customer
-    const byCustomer = await this.purchaseModel.aggregate([
-      { $match: { shipmentId: new Types.ObjectId(shipmentId) } },
+    // Break down by customer (grossProfit is stored as a currency string, e.g. "৳240.40")
+    const purchases = await this.purchaseModel
+      .find({ shipmentId: shipmentObjId })
+      .select(
+        'customerId customerName productWeight productWeightCharge weightChargeProfit grossProfit',
+      );
+
+    const customerMap = new Map<
+      string,
       {
-        $group: {
-          _id: '$customerId',
-          customerName: { $first: '$customerName' },
-          totalWeight: { $sum: '$productWeight' },
-          totalWeightCharge: { $sum: '$productWeightCharge' },
-          weightChargeProfit: { $sum: '$weightChargeProfit' },
-          grossProfit: {
-            $sum: {
-              $toDouble: {
-                $replaceAll: {
-                  input: { $ifNull: ['$grossProfit', '0'] },
-                  find: /[^\d.-]/,
-                  replacement: '',
-                },
-              },
-            },
-          },
-          productCount: { $sum: 1 },
-        },
-      },
-      { $sort: { totalWeight: -1 } },
-    ]);
+        _id: string;
+        customerName: string;
+        totalWeight: number;
+        totalWeightCharge: number;
+        weightChargeProfit: number;
+        grossProfit: number;
+        productCount: number;
+      }
+    >();
+
+    for (const p of purchases) {
+      const key = p.customerId || 'unknown';
+      const entry = customerMap.get(key) ?? {
+        _id: key,
+        customerName: p.customerName,
+        totalWeight: 0,
+        totalWeightCharge: 0,
+        weightChargeProfit: 0,
+        grossProfit: 0,
+        productCount: 0,
+      };
+
+      entry.totalWeight += p.productWeight ?? 0;
+      entry.totalWeightCharge += p.productWeightCharge ?? 0;
+      entry.weightChargeProfit += p.weightChargeProfit ?? 0;
+      entry.grossProfit +=
+        Number(removeCurrencySymbols(p.grossProfit ?? '0')) || 0;
+      entry.productCount += 1;
+
+      customerMap.set(key, entry);
+    }
+
+    const byCustomer = [...customerMap.values()].sort(
+      (a, b) => b.totalWeight - a.totalWeight,
+    );
 
     // Status breakdown
     const byStatus = await this.purchaseModel.aggregate([
-      { $match: { shipmentId: new Types.ObjectId(shipmentId) } },
+      { $match: { shipmentId: shipmentObjId } },
       { $group: { _id: '$status', count: { $sum: 1 } } },
     ]);
 
     // Weight not yet set (productWeight === 0)
     const pendingWeight = await this.purchaseModel.countDocuments({
-      shipmentId: new Types.ObjectId(shipmentId),
+      shipmentId: shipmentObjId,
       productWeight: { $eq: 0 },
     });
 

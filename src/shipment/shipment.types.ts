@@ -35,6 +35,7 @@ export interface PurchaseDocument extends Document {
   _id: Types.ObjectId;
   orderId: string;
   orderItemIndex: number;
+  customerId: string;
   shipmentId?: Types.ObjectId;
   productWeight: number;
   weightChargePerKg: number;
