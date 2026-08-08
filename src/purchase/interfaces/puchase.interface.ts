@@ -1,3 +1,5 @@
+import { Document } from 'mongoose';
+
 export interface PurchaseDocument extends Document {
   customerId: string;
   destination: string;
@@ -29,13 +31,11 @@ export interface PurchaseDocument extends Document {
   cardUsed: string;
   websiteUrl: string;
 
-
-  // shipment extra information 
+  // shipment extra information
 
   productWeight: number;
   weightChargePerKg: number;
   productWeightCharge: number;
   remaniningDue: number;
   shipmentId?: any;
-
 }

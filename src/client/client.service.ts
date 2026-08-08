@@ -21,14 +21,23 @@ export class ClientService {
     private configService: ConfigService,
   ) {}
 
-  async register(userRegistrationDto: UserRegistrationDto): Promise<UserRegistration> {
-    const { username, contactNumber, email, userType, password } = userRegistrationDto;
+  async register(
+    userRegistrationDto: UserRegistrationDto,
+  ): Promise<UserRegistration> {
+    const { username, contactNumber, email, userType, password } =
+      userRegistrationDto;
     const existingUser = await this.userModel.findOne({ email }).exec();
     if (existingUser) {
       throw new ConflictException('User with this email already exists');
     }
     const hashedPassword = await this.hashPassword(password);
-    const user = new this.userModel({ username, contactNumber, email, userType, password: hashedPassword });
+    const user = new this.userModel({
+      username,
+      contactNumber,
+      email,
+      userType,
+      password: hashedPassword,
+    });
     return user.save();
   }
 
@@ -37,31 +46,36 @@ export class ClientService {
     return bcrypt.hash(password, saltRounds);
   }
 
-  async login(userLoginDto: UserLoginDto): Promise<{ user: UserRegistration; token: string }> {
+  async login(
+    userLoginDto: UserLoginDto,
+  ): Promise<{ user: UserRegistration; token: string }> {
     const { email, password } = userLoginDto;
     const user = await this.userModel.findOne({ email }).exec();
     if (!user) {
       throw new NotFoundException('User not found');
     }
-    if (!await this.verifyPassword(password, user.password)) {
+    if (!(await this.verifyPassword(password, user.password))) {
       throw new NotFoundException('Invalid credentials');
     }
     const token = this.generateToken(user);
     return { user, token };
   }
 
-  private async verifyPassword(plainTextPassword: string, hashedPassword: string): Promise<boolean> {
+  private async verifyPassword(
+    plainTextPassword: string,
+    hashedPassword: string,
+  ): Promise<boolean> {
     return bcrypt.compare(plainTextPassword, hashedPassword);
   }
 
   private generateToken(user: UserRegistration): string {
     const jwtSecret = this.configService.get<string>('JWT_SECRET');
-    console.log('JWT_SECRET:', process.env.JWT_SECRET); // Debugging line
-    console.log('jwtSecret from ConfigService:', jwtSecret); // Debugging line
     if (!jwtSecret) {
       throw new Error('JWT_SECRET is not defined');
     }
-    return jwt.sign({ userId: user._id, email: user.email }, jwtSecret, { expiresIn: '1h' });
+    return jwt.sign({ userId: user._id, email: user.email }, jwtSecret, {
+      expiresIn: '1h',
+    });
   }
 
   async getAllUsers(): Promise<UserRegistration[]> {
@@ -72,7 +86,10 @@ export class ClientService {
     return this.userModel.findOne({ email }).exec();
   }
 
-  async updateUser(id: string, updateUserDto: UpdateUserDto): Promise<UserRegistration | null> {
+  async updateUser(
+    id: string,
+    updateUserDto: UpdateUserDto,
+  ): Promise<UserRegistration | null> {
     // If password is being updated, hash it first
     if (updateUserDto.password) {
       updateUserDto.password = await this.hashPassword(updateUserDto.password);
@@ -80,11 +97,13 @@ export class ClientService {
 
     // Check if email is being changed and if it already exists
     if (updateUserDto.email) {
-      const existingUser = await this.userModel.findOne({ 
-        email: updateUserDto.email,
-        _id: { $ne: id } // Exclude current user from check
-      }).exec();
-      
+      const existingUser = await this.userModel
+        .findOne({
+          email: updateUserDto.email,
+          _id: { $ne: id }, // Exclude current user from check
+        })
+        .exec();
+
       if (existingUser) {
         throw new ConflictException('User with this email already exists');
       }
@@ -93,7 +112,7 @@ export class ClientService {
     const updatedUser = await this.userModel
       .findByIdAndUpdate(id, updateUserDto, { new: true })
       .exec();
-    
+
     if (!updatedUser) {
       throw new NotFoundException('User not found');
     }

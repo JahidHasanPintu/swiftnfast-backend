@@ -1,17 +1,10 @@
 import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
 import { AccountsController } from './accounts.controller';
 import { AccountsService } from './accounts.service';
-import { Account, AccountSchema } from './schemas/account.schema';
-import { Transaction, TransactionSchema } from '../transactions/schemas/transaction.schema';
+import { DatabaseSchemasModule } from 'src/database/schemas.module';
 
 @Module({
-  imports: [
-    MongooseModule.forFeature([
-      { name: Account.name, schema: AccountSchema },
-      { name: Transaction.name, schema: TransactionSchema }, // needed for delete guard
-    ]),
-  ],
+  imports: [DatabaseSchemasModule],
   controllers: [AccountsController],
   providers: [AccountsService],
   exports: [AccountsService],

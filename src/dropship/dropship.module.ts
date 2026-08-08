@@ -1,21 +1,13 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
 import { DropShipController } from './dropship.controller';
 import { DropShipService } from './dropship.service';
-import DropShipSchema from './schemas/dropship.schema';
-import CustomerSchema from '../order/schemas/customer.schema';
 import { ShipmentModule } from '../shipment/shipment.module';
+import { DatabaseSchemasModule } from 'src/database/schemas.module';
 
 @Module({
-  imports: [
-    forwardRef(() => ShipmentModule),
-    MongooseModule.forFeature([
-      { name: 'DropShip', schema: DropShipSchema },
-      { name: 'Customer', schema: CustomerSchema },
-    ]),
-  ],
+  imports: [forwardRef(() => ShipmentModule), DatabaseSchemasModule],
   controllers: [DropShipController],
   providers: [DropShipService],
-  exports: [DropShipService, MongooseModule],
+  exports: [DropShipService, DatabaseSchemasModule],
 })
 export class DropShipModule {}

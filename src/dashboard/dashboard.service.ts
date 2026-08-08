@@ -5,11 +5,11 @@ import { Model } from 'mongoose';
 @Injectable()
 export class DashboardService {
   constructor(
-    @InjectModel('Order') private orderModel: Model<any>,
+    @InjectModel('Orders') private orderModel: Model<any>,
     @InjectModel('Customer') private customerModel: Model<any>,
-    @InjectModel('Purchase') private purchaseModel: Model<any>,
+    @InjectModel('Purchases') private purchaseModel: Model<any>,
     @InjectModel('CancelledOrder') private cancelledOrderModel: Model<any>,
-    @InjectModel('Payment') private paymentModel: Model<any>,
+    @InjectModel('Payments') private paymentModel: Model<any>,
   ) {}
 
   private getDateFilter(startDate?: string, endDate?: string) {
@@ -240,11 +240,7 @@ export class DashboardService {
     return result;
   }
 
-  async getTopProducts(
-    startDate?: string,
-    endDate?: string,
-    limit: number = 10,
-  ) {
+  async getTopProducts(startDate?: string, endDate?: string, limit = 10) {
     const dateFilter = this.getDateFilter(startDate, endDate);
 
     const result = await this.orderModel.aggregate([
@@ -269,11 +265,7 @@ export class DashboardService {
     }));
   }
 
-  async getTopCustomers(
-    startDate?: string,
-    endDate?: string,
-    limit: number = 10,
-  ) {
+  async getTopCustomers(startDate?: string, endDate?: string, limit = 10) {
     const dateFilter = this.getDateFilter(startDate, endDate);
 
     const result = await this.orderModel.aggregate([
@@ -322,7 +314,7 @@ export class DashboardService {
     }));
   }
 
-  async getRecentOrders(limit: number = 10) {
+  async getRecentOrders(limit = 10) {
     const orders = await this.orderModel
       .find()
       .sort({ createdAt: -1 })
@@ -335,69 +327,68 @@ export class DashboardService {
     return orders;
   }
 
- async getProfitAnalysis(startDate?: string, endDate?: string) {
-  const purchaseDateFilter: any = {};
+  async getProfitAnalysis(startDate?: string, endDate?: string) {
+    const purchaseDateFilter: any = {};
 
-  if (startDate || endDate) {
-    purchaseDateFilter.purchaseDate = {};
-    if (startDate) {
-      purchaseDateFilter.purchaseDate.$gte = new Date(startDate);
+    if (startDate || endDate) {
+      purchaseDateFilter.purchaseDate = {};
+      if (startDate) {
+        purchaseDateFilter.purchaseDate.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        purchaseDateFilter.purchaseDate.$lte = new Date(endDate);
+      }
     }
-    if (endDate) {
-      purchaseDateFilter.purchaseDate.$lte = new Date(endDate);
-    }
-  }
 
-  const cleanNumber = (field: string) => ({
-    $convert: {
-      input: {
-        $trim: {
-          input: {
-            $replaceAll: {
-              input: field,
-              find: '৳',
-              replacement: '',
+    const cleanNumber = (field: string) => ({
+      $convert: {
+        input: {
+          $trim: {
+            input: {
+              $replaceAll: {
+                input: field,
+                find: '৳',
+                replacement: '',
+              },
             },
           },
         },
+        to: 'double',
+        onError: 0,
+        onNull: 0,
       },
-      to: 'double',
-      onError: 0,
-      onNull: 0,
-    },
-  });
+    });
 
-  const result = await this.purchaseModel.aggregate([
-    { $match: purchaseDateFilter },
-    {
-      $group: {
-        _id: null,
-        totalProfit: { $sum: cleanNumber('$grossProfit') },
-        totalSelling: { $sum: cleanNumber('$selling') },
-        totalBuying: { $sum: cleanNumber('$buyingBDT') },
-        totalOrders: { $sum: 1 },
-        averageProfit: { $avg: cleanNumber('$grossProfit') },
+    const result = await this.purchaseModel.aggregate([
+      { $match: purchaseDateFilter },
+      {
+        $group: {
+          _id: null,
+          totalProfit: { $sum: cleanNumber('$grossProfit') },
+          totalSelling: { $sum: cleanNumber('$selling') },
+          totalBuying: { $sum: cleanNumber('$buyingBDT') },
+          totalOrders: { $sum: 1 },
+          averageProfit: { $avg: cleanNumber('$grossProfit') },
+        },
       },
-    },
-  ]);
+    ]);
 
-  const data = result[0] || {
-    totalProfit: 0,
-    totalSelling: 0,
-    totalBuying: 0,
-    totalOrders: 0,
-    averageProfit: 0,
-  };
+    const data = result[0] || {
+      totalProfit: 0,
+      totalSelling: 0,
+      totalBuying: 0,
+      totalOrders: 0,
+      averageProfit: 0,
+    };
 
-  const profitMargin =
-    data.totalSelling > 0
-      ? ((data.totalProfit / data.totalSelling) * 100).toFixed(2)
-      : '0';
+    const profitMargin =
+      data.totalSelling > 0
+        ? ((data.totalProfit / data.totalSelling) * 100).toFixed(2)
+        : '0';
 
-  return {
-    ...data,
-    profitMargin: Number(profitMargin),
-  };
-}
-
+    return {
+      ...data,
+      profitMargin: Number(profitMargin),
+    };
+  }
 }

@@ -1,7 +1,8 @@
-export interface ShippingAddressDocument extends Document {
+import { Document } from 'mongoose';
 
-    source: string;
-    address: string;
-    origin: string;
-    weightCharge: string;
+export interface ShippingAddressDocument extends Document {
+  source: string;
+  address: string;
+  origin: string;
+  weightCharge: string;
 }

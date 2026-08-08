@@ -15,20 +15,20 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
-      // transform: true,
+      transform: true,
       // forbidNonWhitelisted: true,
       // forbidUnknownValues: true,
     }),
   );
 
   app.enableCors();
-  
+
   app.setViewEngine('hbs');
   app.setBaseViewsDir(join(__dirname, '..', 'views'));
 
   await app.listen(30003);
   // await app.listen(3000);
   console.log('server up and running hello');
-  console.log(`Application running at ${await app.getUrl()}`)
+  console.log(`Application running at ${await app.getUrl()}`);
 }
 bootstrap();

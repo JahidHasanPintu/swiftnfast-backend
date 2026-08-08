@@ -24,13 +24,10 @@ import { DropShipDocument } from '../dropship/interfaces/dropship.interface';
 export class ShipmentService {
   constructor(
     @InjectModel('Shipment') private shipmentModel: Model<ShipmentDocument>,
-    @InjectModel('Purchase') private purchaseModel: Model<PurchaseDocument>,
+    @InjectModel('Purchases') private purchaseModel: Model<PurchaseDocument>,
     @InjectModel('DropShip') private dropshipModel: Model<DropShipDocument>,
     @InjectModel('shipping-address')
-    private shippingAddressModel: Model<ShippingAddressDocument>,
-    // Inject your TransactionService / AccountsService here for auto expense creation
-    // @Inject(forwardRef(() => TransactionsService))
-    // private transactionsService: TransactionsService,
+    private shippingAddressModel: Model<ShippingAddressDocument>, // Inject your TransactionService / AccountsService here for auto expense creation // @Inject(forwardRef(() => TransactionsService)) // private transactionsService: TransactionsService,
   ) {}
 
   // ─── CREATE ────────────────────────────────────────────────────────────────────
@@ -114,10 +111,7 @@ export class ShipmentService {
 
   // ─── UPDATE ────────────────────────────────────────────────────────────────────
 
-  async update(
-    id: string,
-    dto: UpdateShipmentDto,
-  ): Promise<ShipmentDocument> {
+  async update(id: string, dto: UpdateShipmentDto): Promise<ShipmentDocument> {
     const shipment = await this.findOne(id);
     Object.assign(shipment, dto);
     if (dto.actualArrivalDate) {
@@ -148,10 +142,7 @@ export class ShipmentService {
     }
 
     // If this purchase was already in another shipment, subtract from that shipment
-    if (
-      purchase.shipmentId &&
-      purchase.shipmentId.toString() !== shipmentId
-    ) {
+    if (purchase.shipmentId && purchase.shipmentId.toString() !== shipmentId) {
       await this.recalcShipmentTotals(purchase.shipmentId.toString());
     }
 
@@ -277,7 +268,11 @@ export class ShipmentService {
   async bulkLinkPurchases(
     shipmentId: string,
     dto: BulkLinkPurchasesDto,
-  ): Promise<{ shipment: ShipmentDocument; linkedCount: number; errors: string[] }> {
+  ): Promise<{
+    shipment: ShipmentDocument;
+    linkedCount: number;
+    errors: string[];
+  }> {
     const errors: string[] = [];
     let linkedCount = 0;
 
@@ -377,11 +372,7 @@ export class ShipmentService {
 
   // ─── GET PURCHASES FOR SHIPMENT ────────────────────────────────────────────────
 
-  async getLinkedPurchases(
-    shipmentId: string,
-    page = 1,
-    limit = 50,
-  ) {
+  async getLinkedPurchases(shipmentId: string, page = 1, limit = 50) {
     const skip = (page - 1) * limit;
 
     const [purchases, total] = await Promise.all([
@@ -403,11 +394,7 @@ export class ShipmentService {
 
   // ─── GET DROP SHIP ORDERS FOR SHIPMENT ─────────────────────────────────────────
 
-  async getLinkedDropShipOrders(
-    shipmentId: string,
-    page = 1,
-    limit = 50,
-  ) {
+  async getLinkedDropShipOrders(shipmentId: string, page = 1, limit = 50) {
     const skip = (page - 1) * limit;
 
     const [items, total] = await Promise.all([
@@ -602,14 +589,24 @@ export class ShipmentService {
       ]),
     ]);
 
-    const pTotals = purchaseAgg[0] ?? { totalProducts: 0, totalWeightKg: 0, customerWeightChargeTotal: 0, totalGrossProfit: 0 };
-    const dTotals = dropshipAgg[0] ?? { totalProducts: 0, totalWeightKg: 0, customerWeightChargeTotal: 0 };
+    const pTotals = purchaseAgg[0] ?? {
+      totalProducts: 0,
+      totalWeightKg: 0,
+      customerWeightChargeTotal: 0,
+      totalGrossProfit: 0,
+    };
+    const dTotals = dropshipAgg[0] ?? {
+      totalProducts: 0,
+      totalWeightKg: 0,
+      customerWeightChargeTotal: 0,
+    };
 
     await this.shipmentModel.findByIdAndUpdate(shipmentId, {
       $set: {
         totalProducts: pTotals.totalProducts + dTotals.totalProducts,
         totalWeightKg: pTotals.totalWeightKg + dTotals.totalWeightKg,
-        customerWeightChargeTotal: pTotals.customerWeightChargeTotal + dTotals.customerWeightChargeTotal,
+        customerWeightChargeTotal:
+          pTotals.customerWeightChargeTotal + dTotals.customerWeightChargeTotal,
         totalGrossProfit: pTotals.totalGrossProfit,
       },
     });
