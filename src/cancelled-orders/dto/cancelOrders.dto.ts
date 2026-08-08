@@ -2,29 +2,22 @@ import { Type } from 'class-transformer';
 import { IsString, IsNumber, IsDate } from 'class-validator';
 
 export class CancelledOrdersDto {
-    @IsString()
-    customerId: string;
+  @IsString()
+  customerId: string;
 
-    @IsString()
-    orderId: string;
+  @IsString()
+  orderId: string;
 
+  @IsString()
+  customerName: string;
 
-    @IsString()
-    customerName: string;
+  @IsString()
+  productDesc: string;
 
-    @IsString()
-    productDesc: string;
+  @IsString()
+  cancellationReason: string;
 
-    @IsString()
-    cancellationReason: string;
-
-
-    @Type(() => Date) // Use the @Type() decorator to specify expected type
-    @IsDate() // Use the @IsDate() decorator for validation
-    date: Date;
-
-
-
+  @Type(() => Date) // Use the @Type() decorator to specify expected type
+  @IsDate() // Use the @IsDate() decorator for validation
+  date: Date;
 }
-
-

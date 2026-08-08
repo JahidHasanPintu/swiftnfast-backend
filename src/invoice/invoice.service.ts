@@ -9,7 +9,8 @@ export class InvoiceService {
 
   async generateInvoicePDF(orderId: string): Promise<Buffer> {
     const orders = await this.orderService.getOrdersByOrderId(orderId);
-    if (!orders || orders.length === 0) throw new Error('No orders found for this orderId');
+    if (!orders || orders.length === 0)
+      throw new Error('No orders found for this orderId');
 
     const totals = this.orderService.calculateInvoiceTotals(orders);
     const htmlTemplate = this.getPopulatedHtml(orders, totals);
@@ -24,7 +25,14 @@ export class InvoiceService {
     return Buffer.from(pdfBuffer);
   }
 
-  private getPopulatedHtml(orders: OrderDocument[], totals: { grandTotal: number; totalAdvance: number; totalOutstanding: number }): string {
+  private getPopulatedHtml(
+    orders: OrderDocument[],
+    totals: {
+      grandTotal: number;
+      totalAdvance: number;
+      totalOutstanding: number;
+    },
+  ): string {
     const firstOrder = orders[0]; // Use first order for header/customer info
 
     let html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><style>${this.getCss()}</style></head><body><table class="main-table">`;
@@ -33,8 +41,12 @@ export class InvoiceService {
     html += `
       <tr><td><table class="fluid">
         <tr><td><img src="http://localhost:3000/image/logo.png"></td><td><table class="fluid">
-          <tr><td style="font-weight: bold;">Invoice #</td><td style="text-align: right;">${firstOrder.orderId}</td></tr>
-          <tr><td style="font-weight: bold;">Date</td><td style="text-align: right;">${new Date(firstOrder.orderDate).toLocaleDateString()}</td></tr>
+          <tr><td style="font-weight: bold;">Invoice #</td><td style="text-align: right;">${
+            firstOrder.orderId
+          }</td></tr>
+          <tr><td style="font-weight: bold;">Date</td><td style="text-align: right;">${new Date(
+            firstOrder.orderDate,
+          ).toLocaleDateString()}</td></tr>
         </table></td></tr></table></td></tr>`;
 
     // Customer Info
@@ -53,8 +65,12 @@ export class InvoiceService {
       const totalPrice = order.totalPrice || order.uniPrice * order.quantity;
       const outstanding = totalPrice - (order.advancePayment || 0);
       html += `
-        <tr><td>${order.prodDesc}</td><td class="align-right">${order.uniPrice}</td><td class="align-right">${order.quantity}</td>
-        <td class="align-right">${totalPrice}</td><td class="align-right">${order.advancePayment || 0}</td><td class="align-right">${outstanding}</td></tr>`;
+        <tr><td>${order.prodDesc}</td><td class="align-right">${
+        order.uniPrice
+      }</td><td class="align-right">${order.quantity}</td>
+        <td class="align-right">${totalPrice}</td><td class="align-right">${
+        order.advancePayment || 0
+      }</td><td class="align-right">${outstanding}</td></tr>`;
     });
     html += `</table></td></tr>`;
 

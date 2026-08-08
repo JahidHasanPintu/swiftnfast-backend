@@ -11,7 +11,7 @@ export class PathaoService {
   ) {}
 
   private accessToken: string | null = null;
-  private tokenExpiry: number = 0;
+  private tokenExpiry = 0;
 
   // ── Auth ──────────────────────────────────────────────────────────────
   private async getAccessToken(): Promise<string> {
@@ -124,7 +124,12 @@ export class PathaoService {
       {
         $addFields: {
           customerObjectId: {
-            $convert: { input: '$customerId', to: 'objectId', onError: null, onNull: null },
+            $convert: {
+              input: '$customerId',
+              to: 'objectId',
+              onError: null,
+              onNull: null,
+            },
           },
         },
       },

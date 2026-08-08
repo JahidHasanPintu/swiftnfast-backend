@@ -143,10 +143,20 @@ export class PurchaseService {
       {
         $addFields: {
           customerObjectId: {
-            $convert: { input: '$customerId', to: 'objectId', onError: null, onNull: null },
+            $convert: {
+              input: '$customerId',
+              to: 'objectId',
+              onError: null,
+              onNull: null,
+            },
           },
           shipmentObjId: {
-            $convert: { input: '$shipmentId', to: 'objectId', onError: null, onNull: null },
+            $convert: {
+              input: '$shipmentId',
+              to: 'objectId',
+              onError: null,
+              onNull: null,
+            },
           },
         },
       },

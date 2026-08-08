@@ -25,13 +25,19 @@ export class DropShipController {
 
   @Get()
   async findAll(
-    @Query('page', ParseIntPipe) page: number = 1,
-    @Query('pageSize', ParseIntPipe) pageSize: number = 10,
+    @Query('page', ParseIntPipe) page = 1,
+    @Query('pageSize', ParseIntPipe) pageSize = 10,
     @Query('status') status?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ): Promise<CommonPaginationResponse<any>> {
-    return this.dropshipService.findAll(page, pageSize, status, startDate, endDate);
+    return this.dropshipService.findAll(
+      page,
+      pageSize,
+      status,
+      startDate,
+      endDate,
+    );
   }
 
   @Get(':dropshipId')
@@ -54,7 +60,12 @@ export class DropShipController {
     @Body('productWeight') productWeight?: number,
     @Body('weightChargePerKg') weightChargePerKg?: number,
   ) {
-    return this.dropshipService.linkShipment(dropshipId, shipmentId, productWeight, weightChargePerKg);
+    return this.dropshipService.linkShipment(
+      dropshipId,
+      shipmentId,
+      productWeight,
+      weightChargePerKg,
+    );
   }
 
   @Delete(':dropshipId')

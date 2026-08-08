@@ -6,15 +6,28 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Account, AccountDocument, AccountStatus } from './schemas/account.schema';
-import { Transaction, TransactionDocument, TransactionType } from '../transactions/schemas/transaction.schema';
-import { AdjustBalanceDto, CreateAccountDto, UpdateAccountDto } from './dto/account.dto';
+import {
+  Account,
+  AccountDocument,
+  AccountStatus,
+} from './schemas/account.schema';
+import {
+  Transaction,
+  TransactionDocument,
+  TransactionType,
+} from '../transactions/schemas/transaction.schema';
+import {
+  AdjustBalanceDto,
+  CreateAccountDto,
+  UpdateAccountDto,
+} from './dto/account.dto';
 
 @Injectable()
 export class AccountsService {
   constructor(
     @InjectModel(Account.name) private accountModel: Model<AccountDocument>,
-    @InjectModel(Transaction.name) private transactionModel: Model<TransactionDocument>,
+    @InjectModel(Transaction.name)
+    private transactionModel: Model<TransactionDocument>,
   ) {}
 
   // ─── CREATE ───────────────────────────────────────────────────────────────────
@@ -41,7 +54,8 @@ export class AccountsService {
   }
 
   async findOne(id: string): Promise<AccountDocument> {
-    if (!Types.ObjectId.isValid(id)) throw new BadRequestException('Invalid account ID');
+    if (!Types.ObjectId.isValid(id))
+      throw new BadRequestException('Invalid account ID');
     const account = await this.accountModel.findById(id);
     if (!account) throw new NotFoundException(`Account #${id} not found`);
     return account;
@@ -53,7 +67,10 @@ export class AccountsService {
     const account = await this.findOne(id);
 
     if (dto.isDefault) {
-      await this.accountModel.updateMany({ _id: { $ne: id } }, { isDefault: false });
+      await this.accountModel.updateMany(
+        { _id: { $ne: id } },
+        { isDefault: false },
+      );
     }
 
     Object.assign(account, dto);
@@ -65,7 +82,9 @@ export class AccountsService {
   async toggleStatus(id: string): Promise<AccountDocument> {
     const account = await this.findOne(id);
     account.status =
-      account.status === AccountStatus.ACTIVE ? AccountStatus.INACTIVE : AccountStatus.ACTIVE;
+      account.status === AccountStatus.ACTIVE
+        ? AccountStatus.INACTIVE
+        : AccountStatus.ACTIVE;
     return account.save();
   }
 
@@ -106,7 +125,9 @@ export class AccountsService {
       category: 'Balance Adjustment',
       description: dto.reason,
       date: new Date(),
-      adjustmentNote: `Previous: ${account.currentBalance} → New: ${dto.newBalance} (Diff: ${difference > 0 ? '+' : ''}${difference})`,
+      adjustmentNote: `Previous: ${account.currentBalance} → New: ${
+        dto.newBalance
+      } (Diff: ${difference > 0 ? '+' : ''}${difference})`,
       balanceAfter: dto.newBalance,
     });
 
@@ -125,7 +146,9 @@ export class AccountsService {
     totalBalance: number;
     accounts: AccountDocument[];
   }> {
-    const accounts = await this.accountModel.find({ status: AccountStatus.ACTIVE });
+    const accounts = await this.accountModel.find({
+      status: AccountStatus.ACTIVE,
+    });
     const allAccounts = await this.accountModel.find();
 
     const totalBalance = accounts.reduce((sum, a) => sum + a.currentBalance, 0);
@@ -154,7 +177,9 @@ export class AccountsService {
   }
 
   async getBalanceById(accountId: Types.ObjectId): Promise<number> {
-    const account = await this.accountModel.findById(accountId).select('currentBalance');
+    const account = await this.accountModel
+      .findById(accountId)
+      .select('currentBalance');
     if (!account) throw new NotFoundException(`Account ${accountId} not found`);
     return account.currentBalance;
   }

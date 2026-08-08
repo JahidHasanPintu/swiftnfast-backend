@@ -1,29 +1,25 @@
 import { Type } from 'class-transformer';
-import { IsString, IsNumber, IsOptional, } from 'class-validator';
+import { IsString, IsNumber, IsOptional } from 'class-validator';
 
 export class CreateCardBeneficiaryDto {
+  @IsNumber()
+  cardNumber: number;
 
+  @IsString()
+  cardHolderName: string;
 
-    @IsNumber()
-    cardNumber: number;
+  @IsOptional()
+  @IsNumber()
+  exchangeRateUsd: number;
 
-    @IsString()
-    cardHolderName: string;
-    
-    @IsOptional()
-    @IsNumber()
-    exchangeRateUsd: number;
+  @IsOptional()
+  @IsNumber()
+  exchangeRateGbp: number;
 
-    @IsOptional()
-    @IsNumber()
-    exchangeRateGbp: number;
+  @IsOptional()
+  @IsNumber()
+  exchangeRateDirham: number;
 
-    @IsOptional()
-    @IsNumber()
-    exchangeRateDirham: number;
-
-    @IsString()
-    cardType: string;
-
-
+  @IsString()
+  cardType: string;
 }

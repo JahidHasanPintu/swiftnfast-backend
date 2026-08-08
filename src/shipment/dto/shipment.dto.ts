@@ -18,7 +18,10 @@ export class CreateShipmentDto {
   @IsNotEmpty()
   shipmentName: string;
 
-  @ApiProperty({ example: '6a11b3a76ffaf4661b1d356d', description: 'ShippingAddress _id' })
+  @ApiProperty({
+    example: '6a11b3a76ffaf4661b1d356d',
+    description: 'ShippingAddress _id',
+  })
   @IsMongoId()
   shippingAddressId: string;
 
@@ -68,7 +71,10 @@ export class UpdateShipmentDto extends PartialType(CreateShipmentDto) {
   @IsDateString()
   actualArrivalDate?: string;
 
-  @ApiPropertyOptional({ example: 2500, description: 'Other miscellaneous expenses (BDT)' })
+  @ApiPropertyOptional({
+    example: 2500,
+    description: 'Other miscellaneous expenses (BDT)',
+  })
   @IsOptional()
   @IsNumber()
   @Min(0)
@@ -79,7 +85,10 @@ export class UpdateShipmentDto extends PartialType(CreateShipmentDto) {
   @IsString()
   otherExpensesNote?: string;
 
-  @ApiPropertyOptional({ example: 1200, description: 'Customs duty paid (BDT)' })
+  @ApiPropertyOptional({
+    example: 1200,
+    description: 'Customs duty paid (BDT)',
+  })
   @IsOptional()
   @IsNumber()
   @Min(0)

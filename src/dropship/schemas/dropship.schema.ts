@@ -19,7 +19,13 @@ export const DropShipSchema = new mongoose.Schema(
     orderNotes: { type: String },
     status: {
       type: String,
-      enum: ['Pending', 'Ready To Deliver', 'Shipped', 'Delivered', 'Cancelled'],
+      enum: [
+        'Pending',
+        'Ready To Deliver',
+        'Shipped',
+        'Delivered',
+        'Cancelled',
+      ],
       default: 'Pending',
     },
     deliveryMethod: {

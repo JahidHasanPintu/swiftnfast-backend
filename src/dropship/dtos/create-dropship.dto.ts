@@ -1,5 +1,11 @@
 import { Type } from 'class-transformer';
-import { IsString, IsNumber, IsDate, IsOptional, IsNotEmpty } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsDate,
+  IsOptional,
+  IsNotEmpty,
+} from 'class-validator';
 
 export class CreateDropShipDto {
   @IsString()

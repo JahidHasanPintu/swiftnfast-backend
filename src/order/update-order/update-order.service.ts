@@ -47,9 +47,7 @@ export class UpdateOrderService {
 
     if (isMongoId) {
       // Try to find an order whose _id matches (case b)
-      const orderById = await this.orderModel
-        .findById(orderId)
-        .exec();
+      const orderById = await this.orderModel.findById(orderId).exec();
 
       if (orderById) {
         resolvedOrderId = orderById.orderId as string;
@@ -82,8 +80,9 @@ export class UpdateOrderService {
     // ── 4. Resolve the customer via the first existing order's customerId ────
     const mongoCustomerId = existingOrders[0].customerId;
 
-    const existingCustomer: CustomerDocument | null =
-      await this.customerModel.findById(mongoCustomerId).exec();
+    const existingCustomer: CustomerDocument | null = await this.customerModel
+      .findById(mongoCustomerId)
+      .exec();
 
     if (!existingCustomer) {
       throw new NotFoundException(
@@ -92,8 +91,8 @@ export class UpdateOrderService {
     }
 
     // ── 5. Sync order items ──────────────────────────────────────────────────
-    const incomingIndexes: number[] = updateDto.orders.map(
-      (o: any) => Number(o.orderItemIndex),
+    const incomingIndexes: number[] = updateDto.orders.map((o: any) =>
+      Number(o.orderItemIndex),
     );
 
     // 4a. Delete order items no longer present in the payload
@@ -103,9 +102,7 @@ export class UpdateOrderService {
 
     if (itemsToDelete.length > 0) {
       const idsToDelete = itemsToDelete.map((o) => o._id);
-      await this.orderModel
-        .deleteMany({ _id: { $in: idsToDelete } })
-        .exec();
+      await this.orderModel.deleteMany({ _id: { $in: idsToDelete } }).exec();
     }
 
     // 4b. Upsert each incoming order item
@@ -151,8 +148,9 @@ export class UpdateOrderService {
     // ── 7. Upsert payment record ─────────────────────────────────────────────
     let paymentResult: any = null;
     if (updateDto.payments) {
-      const existingPayment: PaymentDocument | null =
-        await this.paymentModel.findOne({ orderId }).exec();
+      const existingPayment: PaymentDocument | null = await this.paymentModel
+        .findOne({ orderId })
+        .exec();
 
       if (existingPayment) {
         const mergedPayment = _.merge(
@@ -160,11 +158,7 @@ export class UpdateOrderService {
           updateDto.payments,
         );
         paymentResult = await this.paymentModel
-          .findOneAndUpdate(
-            { orderId },
-            { $set: mergedPayment },
-            { new: true },
-          )
+          .findOneAndUpdate({ orderId }, { $set: mergedPayment }, { new: true })
           .exec();
       } else {
         paymentResult = await this.paymentModel.create({

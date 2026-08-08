@@ -10,12 +10,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiParam,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { TransactionsService } from './transactions.service';
 import {
   CreateIncomeDto,
@@ -36,7 +31,10 @@ export class TransactionsController {
   // POST /transactions/income
   @Post('income')
   @ApiOperation({ summary: 'Record an income transaction' })
-  @ApiResponse({ status: 201, description: 'Income recorded, account balance updated' })
+  @ApiResponse({
+    status: 201,
+    description: 'Income recorded, account balance updated',
+  })
   addIncome(@Body() dto: CreateIncomeDto) {
     return this.transactionsService.addIncome(dto);
   }
@@ -46,7 +44,10 @@ export class TransactionsController {
   // POST /transactions/expense
   @Post('expense')
   @ApiOperation({ summary: 'Record an expense transaction' })
-  @ApiResponse({ status: 201, description: 'Expense recorded, account balance debited' })
+  @ApiResponse({
+    status: 201,
+    description: 'Expense recorded, account balance debited',
+  })
   @ApiResponse({ status: 400, description: 'Insufficient balance' })
   addExpense(@Body() dto: CreateExpenseDto) {
     return this.transactionsService.addExpense(dto);
@@ -71,7 +72,8 @@ export class TransactionsController {
   //           ?page=1&limit=20&sortBy=date&sortOrder=desc
   @Get()
   @ApiOperation({
-    summary: 'List transactions with rich filtering (date preset, date range, type, account, category, tag)',
+    summary:
+      'List transactions with rich filtering (date preset, date range, type, account, category, tag)',
   })
   findAll(@Query() filter: TransactionFilterDto) {
     return this.transactionsService.findAll(filter);
@@ -79,16 +81,26 @@ export class TransactionsController {
 
   // GET /transactions/income  (convenience - pre-filters type=income)
   @Get('income')
-  @ApiOperation({ summary: 'List only income transactions (all filters supported)' })
+  @ApiOperation({
+    summary: 'List only income transactions (all filters supported)',
+  })
   findIncome(@Query() filter: TransactionFilterDto) {
-    return this.transactionsService.findAll({ ...filter, type: 'income' as any });
+    return this.transactionsService.findAll({
+      ...filter,
+      type: 'income' as any,
+    });
   }
 
   // GET /transactions/expense  (convenience - pre-filters type=expense)
   @Get('expense')
-  @ApiOperation({ summary: 'List only expense transactions (all filters supported)' })
+  @ApiOperation({
+    summary: 'List only expense transactions (all filters supported)',
+  })
   findExpense(@Query() filter: TransactionFilterDto) {
-    return this.transactionsService.findAll({ ...filter, type: 'expense' as any });
+    return this.transactionsService.findAll({
+      ...filter,
+      type: 'expense' as any,
+    });
   }
 
   // ─── ANALYTICS ────────────────────────────────────────────────────────────────
@@ -96,7 +108,8 @@ export class TransactionsController {
   // GET /transactions/analytics
   @Get('analytics')
   @ApiOperation({
-    summary: 'Get comprehensive analytics: totals, net profit, trends, category breakdown, top transactions',
+    summary:
+      'Get comprehensive analytics: totals, net profit, trends, category breakdown, top transactions',
   })
   getAnalytics(@Query() filter: AnalyticsFilterDto) {
     return this.transactionsService.getAnalytics(filter);
@@ -121,7 +134,9 @@ export class TransactionsController {
 
   // PATCH /transactions/:id
   @Patch(':id')
-  @ApiOperation({ summary: 'Update a transaction (amount, category, description, date)' })
+  @ApiOperation({
+    summary: 'Update a transaction (amount, category, description, date)',
+  })
   update(@Param('id') id: string, @Body() dto: UpdateTransactionDto) {
     return this.transactionsService.update(id, dto);
   }

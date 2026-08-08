@@ -35,7 +35,10 @@ export class TransactionsService {
     await this.accountsService.findOne(dto.accountId); // validate exists
 
     // Credit the account
-    const updatedAccount = await this.accountsService.updateBalance(accountId, dto.amount);
+    const updatedAccount = await this.accountsService.updateBalance(
+      accountId,
+      dto.amount,
+    );
 
     const tx = new this.txModel({
       type: TransactionType.INCOME,
@@ -66,7 +69,10 @@ export class TransactionsService {
     }
 
     // Debit the account
-    const updatedAccount = await this.accountsService.updateBalance(accountId, -dto.amount);
+    const updatedAccount = await this.accountsService.updateBalance(
+      accountId,
+      -dto.amount,
+    );
 
     const tx = new this.txModel({
       type: TransactionType.EXPENSE,
@@ -86,7 +92,9 @@ export class TransactionsService {
 
   // ─── TRANSFER ─────────────────────────────────────────────────────────────────
 
-  async transfer(dto: CreateTransferDto): Promise<{ debit: TransactionDocument; credit: TransactionDocument }> {
+  async transfer(
+    dto: CreateTransferDto,
+  ): Promise<{ debit: TransactionDocument; credit: TransactionDocument }> {
     if (dto.fromAccountId === dto.toAccountId) {
       throw new BadRequestException('Cannot transfer to the same account');
     }
@@ -105,8 +113,14 @@ export class TransactionsService {
 
     const date = dto.date ? new Date(dto.date) : new Date();
 
-    const updatedFrom = await this.accountsService.updateBalance(fromAccountId, -dto.amount);
-    const updatedTo = await this.accountsService.updateBalance(toAccountId, dto.amount);
+    const updatedFrom = await this.accountsService.updateBalance(
+      fromAccountId,
+      -dto.amount,
+    );
+    const updatedTo = await this.accountsService.updateBalance(
+      toAccountId,
+      dto.amount,
+    );
 
     const debitTx = new this.txModel({
       type: TransactionType.TRANSFER,
@@ -132,7 +146,10 @@ export class TransactionsService {
       balanceAfter: updatedTo.currentBalance,
     });
 
-    const [debit, credit] = await Promise.all([debitTx.save(), creditTx.save()]);
+    const [debit, credit] = await Promise.all([
+      debitTx.save(),
+      creditTx.save(),
+    ]);
     return { debit, credit };
   }
 
@@ -148,14 +165,20 @@ export class TransactionsService {
     const query: Record<string, any> = {};
 
     // Date range
-    const dateRange = resolveDateRange(filter.preset, filter.startDate, filter.endDate);
+    const dateRange = resolveDateRange(
+      filter.preset,
+      filter.startDate,
+      filter.endDate,
+    );
     if (dateRange) {
       query.date = { $gte: dateRange.startDate, $lte: dateRange.endDate };
     }
 
     if (filter.type) query.type = filter.type;
-    if (filter.accountId) query.accountId = new Types.ObjectId(filter.accountId);
-    if (filter.category) query.category = { $regex: filter.category, $options: 'i' };
+    if (filter.accountId)
+      query.accountId = new Types.ObjectId(filter.accountId);
+    if (filter.category)
+      query.category = { $regex: filter.category, $options: 'i' };
     if (filter.tag) query.tags = { $in: [filter.tag] };
 
     const page = Math.max(1, filter.page ?? 1);
@@ -180,7 +203,8 @@ export class TransactionsService {
   }
 
   async findOne(id: string): Promise<TransactionDocument> {
-    if (!Types.ObjectId.isValid(id)) throw new BadRequestException('Invalid transaction ID');
+    if (!Types.ObjectId.isValid(id))
+      throw new BadRequestException('Invalid transaction ID');
     const tx = await this.txModel
       .findById(id)
       .populate('accountId', 'name type')
@@ -191,23 +215,34 @@ export class TransactionsService {
 
   // ─── UPDATE ───────────────────────────────────────────────────────────────────
 
-  async update(id: string, dto: UpdateTransactionDto): Promise<TransactionDocument> {
+  async update(
+    id: string,
+    dto: UpdateTransactionDto,
+  ): Promise<TransactionDocument> {
     const tx = await this.findOne(id);
 
     if (tx.type === TransactionType.TRANSFER) {
-      throw new BadRequestException('Transfer transactions cannot be edited directly');
+      throw new BadRequestException(
+        'Transfer transactions cannot be edited directly',
+      );
     }
     if (tx.type === TransactionType.BALANCE_ADJUSTMENT) {
-      throw new BadRequestException('Balance adjustment records cannot be edited');
+      throw new BadRequestException(
+        'Balance adjustment records cannot be edited',
+      );
     }
 
     // If amount changed, reverse old and apply new
     if (dto.amount && dto.amount !== tx.amount) {
-      const delta = tx.type === TransactionType.INCOME
-        ? dto.amount - tx.amount   // income: increase = more credit
-        : tx.amount - dto.amount;  // expense: decrease amount = refund difference
+      const delta =
+        tx.type === TransactionType.INCOME
+          ? dto.amount - tx.amount // income: increase = more credit
+          : tx.amount - dto.amount; // expense: decrease amount = refund difference
 
-      await this.accountsService.updateBalance(tx.accountId as Types.ObjectId, delta);
+      await this.accountsService.updateBalance(
+        tx.accountId as Types.ObjectId,
+        delta,
+      );
     }
 
     Object.assign(tx, dto);
@@ -221,7 +256,9 @@ export class TransactionsService {
     const tx = await this.findOne(id);
 
     if (tx.type === TransactionType.TRANSFER) {
-      throw new BadRequestException('Cannot delete individual transfer legs. Delete both legs or reverse the transfer.');
+      throw new BadRequestException(
+        'Cannot delete individual transfer legs. Delete both legs or reverse the transfer.',
+      );
     }
 
     // Reverse the balance effect
@@ -233,7 +270,10 @@ export class TransactionsService {
         : 0;
 
     if (delta !== 0) {
-      await this.accountsService.updateBalance(tx.accountId as Types.ObjectId, delta);
+      await this.accountsService.updateBalance(
+        tx.accountId as Types.ObjectId,
+        delta,
+      );
     }
 
     await tx.deleteOne();
@@ -247,7 +287,11 @@ export class TransactionsService {
       type: { $in: [TransactionType.INCOME, TransactionType.EXPENSE] },
     };
 
-    const dateRange = resolveDateRange(filter.preset, filter.startDate, filter.endDate);
+    const dateRange = resolveDateRange(
+      filter.preset,
+      filter.startDate,
+      filter.endDate,
+    );
     if (dateRange) {
       matchStage.date = { $gte: dateRange.startDate, $lte: dateRange.endDate };
     }
@@ -271,14 +315,23 @@ export class TransactionsService {
     ]);
 
     const income = overview.find((o) => o._id === TransactionType.INCOME) ?? {
-      total: 0, count: 0, avg: 0, max: 0, min: 0,
+      total: 0,
+      count: 0,
+      avg: 0,
+      max: 0,
+      min: 0,
     };
     const expense = overview.find((o) => o._id === TransactionType.EXPENSE) ?? {
-      total: 0, count: 0, avg: 0, max: 0, min: 0,
+      total: 0,
+      count: 0,
+      avg: 0,
+      max: 0,
+      min: 0,
     };
 
     const netProfit = income.total - expense.total;
-    const profitMargin = income.total > 0 ? (netProfit / income.total) * 100 : 0;
+    const profitMargin =
+      income.total > 0 ? (netProfit / income.total) * 100 : 0;
 
     // ── Income by Category ────────────────────────────────────────────────────
     const incomeByCategory = await this.txModel.aggregate([
@@ -324,12 +377,20 @@ export class TransactionsService {
           _id: '$_id.date',
           income: {
             $sum: {
-              $cond: [{ $eq: ['$_id.type', TransactionType.INCOME] }, '$total', 0],
+              $cond: [
+                { $eq: ['$_id.type', TransactionType.INCOME] },
+                '$total',
+                0,
+              ],
             },
           },
           expense: {
             $sum: {
-              $cond: [{ $eq: ['$_id.type', TransactionType.EXPENSE] }, '$total', 0],
+              $cond: [
+                { $eq: ['$_id.type', TransactionType.EXPENSE] },
+                '$total',
+                0,
+              ],
             },
           },
         },
@@ -356,12 +417,20 @@ export class TransactionsService {
           _id: '$_id.month',
           income: {
             $sum: {
-              $cond: [{ $eq: ['$_id.type', TransactionType.INCOME] }, '$total', 0],
+              $cond: [
+                { $eq: ['$_id.type', TransactionType.INCOME] },
+                '$total',
+                0,
+              ],
             },
           },
           expense: {
             $sum: {
-              $cond: [{ $eq: ['$_id.type', TransactionType.EXPENSE] }, '$total', 0],
+              $cond: [
+                { $eq: ['$_id.type', TransactionType.EXPENSE] },
+                '$total',
+                0,
+              ],
             },
           },
         },
@@ -396,12 +465,20 @@ export class TransactionsService {
           accountType: { $first: '$account.type' },
           income: {
             $sum: {
-              $cond: [{ $eq: ['$_id.type', TransactionType.INCOME] }, '$total', 0],
+              $cond: [
+                { $eq: ['$_id.type', TransactionType.INCOME] },
+                '$total',
+                0,
+              ],
             },
           },
           expense: {
             $sum: {
-              $cond: [{ $eq: ['$_id.type', TransactionType.EXPENSE] }, '$total', 0],
+              $cond: [
+                { $eq: ['$_id.type', TransactionType.EXPENSE] },
+                '$total',
+                0,
+              ],
             },
           },
         },
@@ -449,7 +526,11 @@ export class TransactionsService {
 
   async getCashflowStatement(filter: AnalyticsFilterDto) {
     const matchStage: Record<string, any> = {};
-    const dateRange = resolveDateRange(filter.preset, filter.startDate, filter.endDate);
+    const dateRange = resolveDateRange(
+      filter.preset,
+      filter.startDate,
+      filter.endDate,
+    );
 
     if (dateRange) {
       matchStage.date = { $gte: dateRange.startDate, $lte: dateRange.endDate };

@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import { ShippingAddressService } from './shipping-address.service';
 import { ShippingAddressDto } from './dto/shippingAddress.dto';
 import { ShippingAddressDocument } from './interfaces/shippingAddress.interface.';
@@ -17,9 +26,10 @@ export class ShippingAddressController {
     return this.shippingAddressService.getAllCancelledOrdersList();
   }
 
-
   @Get('by-source')
-  async getShipmentInfoBySource(@Query() query: ShippingAddressDto): Promise<ShippingAddressDocument[]> {
+  async getShipmentInfoBySource(
+    @Query() query: ShippingAddressDto,
+  ): Promise<ShippingAddressDocument[]> {
     return this.shippingAddressService.getShipmentInfoBySource(query.source);
   }
 
@@ -36,7 +46,6 @@ export class ShippingAddressController {
     return { message: 'Shipping address deleted successfully' };
   }
 
-
   @Put(':id')
   async updateById(
     @Param('id') id: string,
@@ -44,8 +53,4 @@ export class ShippingAddressController {
   ): Promise<ShippingAddressDocument> {
     return this.shippingAddressService.updateById(id, updateShippingAddressDto);
   }
-  
-
-
-  
 }

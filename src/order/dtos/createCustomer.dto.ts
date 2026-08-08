@@ -1,65 +1,59 @@
 import { Type } from 'class-transformer';
-import { IsString, IsNumber, IsDate, IsEmail, IsNotEmpty, IsOptional } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsDate,
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+} from 'class-validator';
 
 export class CreateCustomerDto {
+  @IsString()
+  customerId: string;
 
+  @IsString()
+  customerName: string;
 
+  @IsString()
+  @IsNotEmpty()
+  contactNumber: string;
 
-    @IsString()
-    customerId: string;
+  @IsOptional()
+  emailAddress: string;
 
-    @IsString()
-    customerName: string;
+  @IsString()
+  shippingAddress: string;
 
-    @IsString()
-    @IsNotEmpty()
-    contactNumber: string;
+  @IsNumber()
+  grandTotal: number;
 
-    @IsOptional()
-    emailAddress: string;
+  @IsOptional()
+  @IsNumber()
+  totalAdvance: number;
 
-    @IsString()
-    shippingAddress: string;
+  @IsString()
+  sourceOfOrder: string;
 
-    @IsNumber()
-    grandTotal: number;
+  @IsString()
+  districtName: string;
 
-    @IsOptional()
-    @IsNumber()
-    totalAdvance: number;
+  @Type(() => Date) // Use the @Type() decorator to specify expected type
+  @IsOptional()
+  @IsDate() // Use the @IsDate() decorator for validation
+  customerJoiningDate: string;
 
-    @IsString()
-    sourceOfOrder: string;
+  @Type(() => Date) // Use the @Type() decorator to specify expected type
+  @IsOptional()
+  @IsDate() // Use the @IsDate() decorator for validation
+  customerDateOfBirth: string;
 
-    @IsString()
-    districtName: string;
+  @Type(() => Date) // Use the @Type() decorator to specify expected type
+  @IsDate() // Use the @IsDate() decorator for validation
+  orderDate: string;
 
-    @Type(() => Date) // Use the @Type() decorator to specify expected type
-    @IsOptional()
-    @IsDate() // Use the @IsDate() decorator for validation
-    customerJoiningDate: string;
+  orderId?: string; // The order ID will be generated on the backend
 
-
-
-
-    @Type(() => Date) // Use the @Type() decorator to specify expected type
-    @IsOptional()
-    @IsDate() // Use the @IsDate() decorator for validation
-    customerDateOfBirth: string;
-
-
-    @Type(() => Date) // Use the @Type() decorator to specify expected type
-
-    @IsDate() // Use the @IsDate() decorator for validation
-    orderDate: string;
-
-
-    orderId?: string; // The order ID will be generated on the backend
-
-
-
-
-    @IsOptional()
-    createdBy: string;
-
+  @IsOptional()
+  createdBy: string;
 }

@@ -1,11 +1,11 @@
 import * as mongoose from 'mongoose';
 
 export enum ShipmentStatus {
-  PENDING = 'pending',         // agent collecting orders
-  IN_TRANSIT = 'in_transit',   // shipped from origin, in air/sea
-  ARRIVED = 'arrived',         // landed in Bangladesh
-  CUSTOMS = 'customs',         // in customs clearance
-  DELIVERED = 'delivered',     // all products delivered to customers
+  PENDING = 'pending', // agent collecting orders
+  IN_TRANSIT = 'in_transit', // shipped from origin, in air/sea
+  ARRIVED = 'arrived', // landed in Bangladesh
+  CUSTOMS = 'customs', // in customs clearance
+  DELIVERED = 'delivered', // all products delivered to customers
   CANCELLED = 'cancelled',
 }
 
@@ -22,12 +22,12 @@ export const ShipmentSchema = new mongoose.Schema(
       required: true,
     },
     // Denormalized for fast reads & historical accuracy
-    agentName: { type: String, required: true },       // e.g. "Shameem"
-    origin: { type: String, required: true },          // e.g. "United States"
-    country: { type: String, required: true },         // e.g. "USA"
+    agentName: { type: String, required: true }, // e.g. "Shameem"
+    origin: { type: String, required: true }, // e.g. "United States"
+    country: { type: String, required: true }, // e.g. "USA"
 
     // ── Dates ───────────────────────────────────────────────────────────────────
-    shipmentDate: { type: Date, required: true },      // date we send from origin / agent ships
+    shipmentDate: { type: Date, required: true }, // date we send from origin / agent ships
     expectedArrivalDate: { type: Date },
     actualArrivalDate: { type: Date },
 
@@ -39,8 +39,8 @@ export const ShipmentSchema = new mongoose.Schema(
     },
 
     // ── Weight & Products ───────────────────────────────────────────────────────
-    totalProducts: { type: Number, default: 0 },       // count of purchase items linked
-    totalWeightKg: { type: Number, default: 0 },       // sum of productWeight across purchases
+    totalProducts: { type: Number, default: 0 }, // count of purchase items linked
+    totalWeightKg: { type: Number, default: 0 }, // sum of productWeight across purchases
 
     // ── Cost Tracking (Profit Source 1) ─────────────────────────────────────────
     totalShippingCost: { type: Number, default: 0 },
@@ -66,15 +66,15 @@ export const ShipmentSchema = new mongoose.Schema(
     // = weightChargeProfit + totalGrossProfit
 
     // ── Other Costs ─────────────────────────────────────────────────────────────
-    customsDuty: { type: Number, default: 0 },         // customs charges if any
-    otherExpenses: { type: Number, default: 0 },        // warehouse, handling, misc
+    customsDuty: { type: Number, default: 0 }, // customs charges if any
+    otherExpenses: { type: Number, default: 0 }, // warehouse, handling, misc
     otherExpensesNote: { type: String },
 
     // ── Tracking & Logistics ────────────────────────────────────────────────────
-    trackingNumber: { type: String },                  // courier tracking ID
-    airline: { type: String },                         // e.g. "Emirates", "Qatar Airways"
+    trackingNumber: { type: String }, // courier tracking ID
+    airline: { type: String }, // e.g. "Emirates", "Qatar Airways"
     flightNumber: { type: String },
-    portOfEntry: { type: String, default: 'Dhaka' },   // e.g. "Chittagong", "Dhaka"
+    portOfEntry: { type: String, default: 'Dhaka' }, // e.g. "Chittagong", "Dhaka"
 
     // ── Finance Link ────────────────────────────────────────────────────────────
     shippingExpenseTransactionId: {
@@ -93,11 +93,17 @@ export const ShipmentSchema = new mongoose.Schema(
 // Auto-calculate derived fields before save
 ShipmentSchema.pre('save', function (next) {
   if (this.totalShippingCost > 0 && this.totalWeightKg > 0) {
-    this.actualWeightChargePerKg =
-      parseFloat((this.totalShippingCost / this.totalWeightKg).toFixed(2));
+    this.actualWeightChargePerKg = parseFloat(
+      (this.totalShippingCost / this.totalWeightKg).toFixed(2),
+    );
   }
   this.weightChargeProfit = parseFloat(
-    (this.customerWeightChargeTotal - this.totalShippingCost - this.customsDuty - this.otherExpenses).toFixed(2),
+    (
+      this.customerWeightChargeTotal -
+      this.totalShippingCost -
+      this.customsDuty -
+      this.otherExpenses
+    ).toFixed(2),
   );
   this.totalNetProfit = parseFloat(
     (this.weightChargeProfit + this.totalGrossProfit).toFixed(2),

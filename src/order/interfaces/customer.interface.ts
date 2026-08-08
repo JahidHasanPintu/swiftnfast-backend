@@ -17,5 +17,4 @@ export interface CustomerDocument extends Document {
   createdBy: string;
 }
 
-
 export default CustomerDocument;

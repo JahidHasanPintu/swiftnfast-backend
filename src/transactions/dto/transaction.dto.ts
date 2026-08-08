@@ -163,10 +163,17 @@ export class UpdateTransactionDto {
 
 // ─── Filter / Query DTOs ───────────────────────────────────────────────────────
 
-export type DatePreset = 'today' | 'this_week' | 'this_month' | 'this_year' | 'custom';
+export type DatePreset =
+  | 'today'
+  | 'this_week'
+  | 'this_month'
+  | 'this_year'
+  | 'custom';
 
 export class TransactionFilterDto {
-  @ApiPropertyOptional({ enum: ['today', 'this_week', 'this_month', 'this_year', 'custom'] })
+  @ApiPropertyOptional({
+    enum: ['today', 'this_week', 'this_month', 'this_year', 'custom'],
+  })
   @IsOptional()
   @IsString()
   preset?: DatePreset;
@@ -223,7 +230,9 @@ export class TransactionFilterDto {
 }
 
 export class AnalyticsFilterDto {
-  @ApiPropertyOptional({ enum: ['today', 'this_week', 'this_month', 'this_year', 'custom'] })
+  @ApiPropertyOptional({
+    enum: ['today', 'this_week', 'this_month', 'this_year', 'custom'],
+  })
   @IsOptional()
   @IsString()
   preset?: DatePreset;

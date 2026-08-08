@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException, forwardRef, Inject } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  forwardRef,
+  Inject,
+} from '@nestjs/common';
 import { InjectModel, InjectConnection } from '@nestjs/mongoose';
 import { Connection, Model } from 'mongoose';
 import { DropShipDocument } from './interfaces/dropship.interface';
@@ -28,7 +34,9 @@ export class DropShipService {
     return `DSP-${day}${month}${year}${randomDigits}`;
   }
 
-  async create(dto: CreateDropShipDto): Promise<{ message: string; dropship: DropShipDocument }> {
+  async create(
+    dto: CreateDropShipDto,
+  ): Promise<{ message: string; dropship: DropShipDocument }> {
     const session = await this.connection.startSession();
     session.startTransaction();
 
@@ -81,11 +89,16 @@ export class DropShipService {
       await session.commitTransaction();
       session.endSession();
 
-      return { message: 'Drop ship order created successfully', dropship: dropshipDoc };
+      return {
+        message: 'Drop ship order created successfully',
+        dropship: dropshipDoc,
+      };
     } catch (error) {
       await session.abortTransaction();
       session.endSession();
-      throw new BadRequestException(`Error creating drop ship order: ${error.message}`);
+      throw new BadRequestException(
+        `Error creating drop ship order: ${error.message}`,
+      );
     }
   }
 
@@ -147,7 +160,10 @@ export class DropShipService {
   }
 
   async findOne(dropshipId: string): Promise<DropShipDocument> {
-    const doc = await this.dropshipModel.findOne({ dropshipId }).populate('customerId').exec();
+    const doc = await this.dropshipModel
+      .findOne({ dropshipId })
+      .populate('customerId')
+      .exec();
     if (!doc) {
       throw new NotFoundException(`Drop ship order ${dropshipId} not found`);
     }
@@ -160,22 +176,32 @@ export class DropShipService {
   ): Promise<DropShipDocument> {
     const setFields: Record<string, any> = {};
 
-    if (dto.productDescription !== undefined) setFields.productDescription = dto.productDescription;
+    if (dto.productDescription !== undefined)
+      setFields.productDescription = dto.productDescription;
     if (dto.productUrl !== undefined) setFields.productUrl = dto.productUrl;
     if (dto.quantity !== undefined) setFields.quantity = dto.quantity;
     if (dto.color !== undefined) setFields.color = dto.color;
     if (dto.size !== undefined) setFields.size = dto.size;
-    if (dto.productWeight !== undefined) setFields.productWeight = dto.productWeight;
-    if (dto.weightChargePerKg !== undefined) setFields.weightChargePerKg = dto.weightChargePerKg;
-    if (dto.productWeightCharge !== undefined) setFields.productWeightCharge = dto.productWeightCharge;
-    if (dto.remainingDue !== undefined) setFields.remainingDue = dto.remainingDue;
+    if (dto.productWeight !== undefined)
+      setFields.productWeight = dto.productWeight;
+    if (dto.weightChargePerKg !== undefined)
+      setFields.weightChargePerKg = dto.weightChargePerKg;
+    if (dto.productWeightCharge !== undefined)
+      setFields.productWeightCharge = dto.productWeightCharge;
+    if (dto.remainingDue !== undefined)
+      setFields.remainingDue = dto.remainingDue;
     if (dto.orderNotes !== undefined) setFields.orderNotes = dto.orderNotes;
     if (dto.status !== undefined) setFields.status = dto.status;
-    if (dto.deliveryMethod !== undefined) setFields.deliveryMethod = dto.deliveryMethod;
-    if (dto.deliveryDate !== undefined) setFields.deliveryDate = new Date(dto.deliveryDate);
+    if (dto.deliveryMethod !== undefined)
+      setFields.deliveryMethod = dto.deliveryMethod;
+    if (dto.deliveryDate !== undefined)
+      setFields.deliveryDate = new Date(dto.deliveryDate);
 
     // Recalculate productWeightCharge if weight or rate changed
-    if (dto.productWeight !== undefined || dto.weightChargePerKg !== undefined) {
+    if (
+      dto.productWeight !== undefined ||
+      dto.weightChargePerKg !== undefined
+    ) {
       const existing = await this.dropshipModel.findOne({ dropshipId }).exec();
       if (existing) {
         const weight = dto.productWeight ?? existing.productWeight;
@@ -213,7 +239,8 @@ export class DropShipService {
     doc.shipmentId = new mongoose.Types.ObjectId(shipmentId);
 
     if (productWeight !== undefined) doc.productWeight = productWeight;
-    if (weightChargePerKg !== undefined) doc.weightChargePerKg = weightChargePerKg;
+    if (weightChargePerKg !== undefined)
+      doc.weightChargePerKg = weightChargePerKg;
     doc.productWeightCharge = parseFloat(
       (doc.productWeight * doc.weightChargePerKg).toFixed(2),
     );

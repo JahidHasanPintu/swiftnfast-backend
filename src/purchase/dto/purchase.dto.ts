@@ -88,19 +88,15 @@ export class CreatePurchaseDto {
   @IsString()
   websiteUrl: string;
 
-
-
-
   // shipment extra information ( shipmemnt module)
 
   @IsOptional()
   @IsNumber()
   productWeight: number;
 
-
   @IsOptional()
   @IsNumber()
-  weightChargePerKg
+  weightChargePerKg;
 
   @IsOptional()
   @IsNumber()
@@ -109,10 +105,4 @@ export class CreatePurchaseDto {
   @IsOptional()
   @IsNumber()
   remaniningDue: number;
-
-
-
-  
-
-
 }

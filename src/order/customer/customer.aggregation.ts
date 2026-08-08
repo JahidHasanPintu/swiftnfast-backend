@@ -23,21 +23,19 @@ export function buildCustomerDedupPipeline(
     pipeline.push({ $match: match } as PipelineStage);
   }
 
-  pipeline.push(
-    {
-      $facet: {
-        grouped: [
-          { $sort: { createdAt: -1 } },
-          { $group: { _id: '$contactNumber', doc: { $first: '$$ROOT' } } },
-          { $replaceRoot: { newRoot: '$doc' } },
-          { $sort: { createdAt: -1 } },
-          { $skip: skip },
-          { $limit: pageSize },
-        ],
-        total: [{ $group: { _id: '$contactNumber' } }, { $count: 'n' }],
-      },
+  pipeline.push({
+    $facet: {
+      grouped: [
+        { $sort: { createdAt: -1 } },
+        { $group: { _id: '$contactNumber', doc: { $first: '$$ROOT' } } },
+        { $replaceRoot: { newRoot: '$doc' } },
+        { $sort: { createdAt: -1 } },
+        { $skip: skip },
+        { $limit: pageSize },
+      ],
+      total: [{ $group: { _id: '$contactNumber' } }, { $count: 'n' }],
     },
-  );
+  });
 
   return pipeline;
 }

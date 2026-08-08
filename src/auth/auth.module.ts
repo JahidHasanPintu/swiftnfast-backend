@@ -7,13 +7,13 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 
 @Module({
-    imports: [
-        PassportModule,
-        UserModule, // Import UserModule to use User service
-    ],
+  imports: [
+    PassportModule,
+    UserModule, // Import UserModule to use User service
+  ],
 
-    exports: [PassportModule],
-    controllers: [AuthController],
-    providers: [AuthService],
+  exports: [PassportModule],
+  controllers: [AuthController],
+  providers: [AuthService],
 })
-export class AuthModule { }
+export class AuthModule {}

@@ -51,7 +51,11 @@ export class DashboardController {
     @Query('limit') limit?: string,
   ) {
     const parsedLimit = Number(limit) || 10;
-    return this.dashboardService.getTopCustomers(startDate, endDate, parsedLimit);
+    return this.dashboardService.getTopCustomers(
+      startDate,
+      endDate,
+      parsedLimit,
+    );
   }
 
   @Get('sales-by-country')
@@ -63,7 +67,7 @@ export class DashboardController {
   }
 
   @Get('recent-orders')
-  async getRecentOrders(@Query('limit') limit: number = 10) {
+  async getRecentOrders(@Query('limit') limit = 10) {
     return this.dashboardService.getRecentOrders(limit);
   }
 

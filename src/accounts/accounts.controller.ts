@@ -20,7 +20,11 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { AccountsService } from './accounts.service';
-import { AdjustBalanceDto, CreateAccountDto, UpdateAccountDto } from './dto/account.dto';
+import {
+  AdjustBalanceDto,
+  CreateAccountDto,
+  UpdateAccountDto,
+} from './dto/account.dto';
 
 @ApiTags('Accounts')
 @Controller('accounts')
@@ -29,7 +33,9 @@ export class AccountsController {
 
   // POST /accounts
   @Post()
-  @ApiOperation({ summary: 'Create a new account (Cash, Bank, Bkash, Rocket, etc.)' })
+  @ApiOperation({
+    summary: 'Create a new account (Cash, Bank, Bkash, Rocket, etc.)',
+  })
   @ApiResponse({ status: 201, description: 'Account created successfully' })
   create(@Body() dto: CreateAccountDto) {
     return this.accountsService.create(dto);
@@ -48,7 +54,9 @@ export class AccountsController {
 
   // GET /accounts/summary
   @Get('summary')
-  @ApiOperation({ summary: 'Get total balance and account summary for dashboard' })
+  @ApiOperation({
+    summary: 'Get total balance and account summary for dashboard',
+  })
   getSummary() {
     return this.accountsService.getSummary();
   }
@@ -87,7 +95,9 @@ export class AccountsController {
   // DELETE /accounts/:id
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Delete an account (only if no transactions exist)' })
+  @ApiOperation({
+    summary: 'Delete an account (only if no transactions exist)',
+  })
   remove(@Param('id') id: string) {
     return this.accountsService.remove(id);
   }

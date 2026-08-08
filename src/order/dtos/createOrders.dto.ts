@@ -2,64 +2,56 @@ import { Type } from 'class-transformer';
 import { IsString, IsNumber, IsDate, IsOptional } from 'class-validator';
 
 export class CreateOrderDto {
-    @IsString()
-    productUrl: string;
+  @IsString()
+  productUrl: string;
 
-    @IsNumber()
-    quantity: number;
+  @IsNumber()
+  quantity: number;
 
-    @IsOptional()
-    couponCode: string;
+  @IsOptional()
+  couponCode: string;
 
-    @IsString()
-    prodDesc: string;
+  @IsString()
+  prodDesc: string;
 
+  @IsOptional()
+  color: string;
 
-    @IsOptional()
-    color: string;
+  @IsOptional()
+  size: string;
 
+  @IsString()
+  origin: string;
 
-    @IsOptional()
-    size: string;
+  @IsNumber()
+  uniPrice: number;
 
-    @IsString()
-    origin: string;
+  @IsNumber()
+  totalPrice: number;
 
-    @IsNumber()
-    uniPrice: number;
+  @IsOptional()
+  @IsNumber()
+  advancePayment: number;
 
-    @IsNumber()
-    totalPrice: number;
+  @IsNumber()
+  remainingAmount: number;
 
-    @IsOptional()
-    @IsNumber()
-    advancePayment: number;
+  orderId?: string; // The order ID will be generated on the backend
+  isPurchased?: boolean;
 
-    @IsNumber()
-    remainingAmount: number;
+  @IsOptional()
+  orderItemIndex: number;
 
-    orderId?: string; // The order ID will be generated on the backend
-    isPurchased?: boolean;
+  customerName?: string;
+  contactNo?: string;
+  grandTotal?: number;
 
-    @IsOptional()
-    orderItemIndex: number;
+  @IsOptional()
+  createdBy: string;
 
-    customerName?: string;
-    contactNo?: string;
-    grandTotal?: number;
+  @IsOptional()
+  orderNotes: string;
 
-
-    @IsOptional()
-    createdBy: string;
-
-    @IsOptional()
-    orderNotes: string
-
-    @IsOptional()
-    websiteUrl: string
-
-
-
-
+  @IsOptional()
+  websiteUrl: string;
 }
-

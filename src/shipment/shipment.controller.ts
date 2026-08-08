@@ -28,10 +28,7 @@ import {
   BulkLinkPurchasesDto,
 } from './dto/shipment.dto';
 import { ShipmentStatus } from './schemas/shipment.schema';
-import {
-  ShipmentDocument,
-  PurchaseDocument,
-} from './shipment.types';
+import { ShipmentDocument, PurchaseDocument } from './shipment.types';
 
 @ApiTags('Shipments')
 @Controller('shipments')
@@ -105,7 +102,10 @@ export class ShipmentController {
   @ApiOperation({
     summary: 'Update shipment metadata, status, arrival date, extra costs',
   })
-  update(@Param('id') id: string, @Body() dto: UpdateShipmentDto): Promise<ShipmentDocument> {
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateShipmentDto,
+  ): Promise<ShipmentDocument> {
     return this.shipmentService.update(id, dto);
   }
 
@@ -118,7 +118,10 @@ export class ShipmentController {
       'Set total shipping cost → auto-calculates actualWeightChargePerKg, ' +
       'updates all linked purchases, computes weight-charge profit, creates expense transaction',
   })
-  setShippingCost(@Param('id') id: string, @Body() dto: SetShippingCostDto): Promise<ShipmentDocument> {
+  setShippingCost(
+    @Param('id') id: string,
+    @Body() dto: SetShippingCostDto,
+  ): Promise<ShipmentDocument> {
     return this.shipmentService.setShippingCost(id, dto);
   }
 

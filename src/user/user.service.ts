@@ -6,60 +6,54 @@ import { User } from './schemas/login.schemas';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcryptjs';
 
-
 @Injectable()
 export class UserService {
+  constructor(
+    @InjectModel('Login') private readonly userModel: Model<UserDocument>,
+  ) {}
 
-    constructor(@InjectModel('Login') private readonly userModel: Model<UserDocument>) { }
+  async create(userDto: LoginDto): Promise<User> {
+    const { username, password, roles } = userDto;
 
+    // Hash and salt the password
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    async create(userDto: LoginDto): Promise<User> {
-        const { username, password, roles } = userDto;
+    // Create a new user object with hashed password
+    const newUser = new this.userModel({
+      username,
+      password: hashedPassword,
+      roles,
+    });
 
-        // Hash and salt the password
-        const hashedPassword = await bcrypt.hash(password, 10);
+    const savedUser = await newUser.save();
 
-        // Create a new user object with hashed password
-        const newUser = new this.userModel({
-            username,
-            password: hashedPassword,
-            roles,
-        });
+    return savedUser.toObject(); // Convert the saved user to a plain JavaScript object
+  }
 
-        const savedUser = await newUser.save();
-
-        return savedUser.toObject(); // Convert the saved user to a plain JavaScript object
+  async validateUser(username: string, password: string): Promise<User | null> {
+    const user = await this.userModel.findOne({ username }).exec();
+    if (user && (await bcrypt.compare(password, user.password))) {
+      return user.toObject();
     }
+    return null;
+  }
 
+  async findOneByUsername(username: string): Promise<User | null> {
+    return this.userModel.findOne({ username });
+  }
 
-    async validateUser(username: string, password: string): Promise<User | null> {
-        const user = await this.userModel.findOne({ username }).exec();
-        if (user && await bcrypt.compare(password, user.password)) {
-            return user.toObject();
-        }
-        return null;
-    }
+  async findById(id: string): Promise<User | null> {
+    const user = await this.userModel.findById(id).exec();
+    return user?.toObject(); // This ensures the returned document is of type User
+  }
 
+  async findByEmail(email: string) {
+    return this.userModel.findOne({
+      email,
+    });
+  }
 
-
-    async findOneByUsername(username: string): Promise<User | null> {
-        return this.userModel.findOne({ username });
-    }
-
-
-    async findById(id: string): Promise<User | null> {
-        const user = await this.userModel.findById(id).exec();
-        return user?.toObject(); // This ensures the returned document is of type User
-    }
-
-    async findByEmail(email: string) {
-        return this.userModel.findOne({
-            email
-        });
-    }
-
-    async allUser() {
-        return this.userModel.find()
-    }
-
+  async allUser() {
+    return this.userModel.find();
+  }
 }
