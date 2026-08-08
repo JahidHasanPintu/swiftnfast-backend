@@ -13,10 +13,7 @@ import { CreatePurchaseDto } from './dto/purchase.dto';
 import { UpdatePurchaseDto } from './dto/updatePurchase.dto';
 import { CommonPaginationResponse } from 'src/common/interfaces/CommonPaginationResponse';
 import { PathaoService } from './pathao.service';
-import {
-  PathaoBulkDeliveryDto,
-  PathaoSingleDeliveryDto,
-} from './dto/pathao.dto';
+import { PathaoBulkDeliveryDto } from './dto/pathao.dto';
 
 @Controller('purchase')
 export class PurchaseController {

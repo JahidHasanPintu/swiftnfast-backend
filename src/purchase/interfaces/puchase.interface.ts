@@ -1,4 +1,4 @@
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 export interface PurchaseDocument extends Document {
   customerId: string;
@@ -30,6 +30,7 @@ export interface PurchaseDocument extends Document {
   orderItemIndex: number;
   cardUsed: string;
   websiteUrl: string;
+  confirmationImage: string;
 
   // shipment extra information
 
@@ -37,5 +38,18 @@ export interface PurchaseDocument extends Document {
   weightChargePerKg: number;
   productWeightCharge: number;
   remaniningDue: number;
-  shipmentId?: any;
+  shipmentId: Types.ObjectId | string | null;
+
+  actualWeightChargePerKg: number;
+  weightChargeProfit: number;
+  status: string;
+  deliveryDate: Date;
+  deliveryMethod: string;
+  pathaoConsignmentId: string;
+  pathaoOrderId: string;
+  pathaoStatus: string;
+  pathaoCreatedAt: Date;
+  recipientAddress: string;
+  recipientPhone: string;
+  profitRecorded: boolean;
 }

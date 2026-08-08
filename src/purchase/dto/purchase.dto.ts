@@ -5,13 +5,12 @@ import {
   IsDate,
   IsUrl,
   IsOptional,
-  isEmail,
   IsEmail,
 } from 'class-validator';
 
 export class CreatePurchaseDto {
   @IsString()
-  customerId: number;
+  customerId: string;
 
   @IsString()
   destination: string;
@@ -29,10 +28,10 @@ export class CreatePurchaseDto {
   buyingUP: string;
 
   @IsString()
-  buyingBDT: number;
+  buyingBDT: string;
 
   @IsString()
-  advance: number;
+  advance: string;
 
   @IsString()
   grossProfit: string;
@@ -80,7 +79,7 @@ export class CreatePurchaseDto {
   orderItemIndex: number;
 
   @IsUrl()
-  confirmationImage: number;
+  confirmationImage: string;
 
   cardUsed: string;
 
@@ -96,7 +95,7 @@ export class CreatePurchaseDto {
 
   @IsOptional()
   @IsNumber()
-  weightChargePerKg;
+  weightChargePerKg: number;
 
   @IsOptional()
   @IsNumber()

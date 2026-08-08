@@ -14,6 +14,7 @@ import { UpdatePurchaseDto } from './dto/updatePurchase.dto';
 import { CommonPaginationResponse } from 'src/common/interfaces/CommonPaginationResponse';
 import { removeCurrencySymbols } from 'src/utils/currency.util';
 import { ShipmentService } from 'src/shipment/shipment.service';
+import { PurchaseDocument as ShipmentPurchaseDocument } from 'src/shipment/shipment.types';
 
 @Injectable()
 export class PurchaseService {
@@ -234,24 +235,22 @@ export class PurchaseService {
     await this.PurchaseModel.deleteOne({ orderId, orderItemIndex }).exec();
   }
 
-  async filterPurchases(
-    page: number,
-    pageSize: number,
-    startDate?: Date, // Change to Date
-    endDate?: Date, // Change to Date
+  private buildFilter(
+    startDate?: Date,
+    endDate?: Date,
     websiteName?: string,
     cardType?: string,
     destination?: string,
     country?: string,
-  ): Promise<CommonPaginationResponse<any>> {
-    const filter: any = {};
+  ): Record<string, any> {
+    const filter: Record<string, any> = {};
 
     if (startDate instanceof Date && !isNaN(startDate.getTime())) {
-      filter.purchaseDate = { ...filter.purchaseDate, $gte: startDate };
+      filter.purchaseDate = { ...(filter.purchaseDate || {}), $gte: startDate };
     }
 
     if (endDate instanceof Date && !isNaN(endDate.getTime())) {
-      filter.purchaseDate = { ...filter.purchaseDate, $lte: endDate };
+      filter.purchaseDate = { ...(filter.purchaseDate || {}), $lte: endDate };
     }
 
     if (websiteName) {
@@ -270,7 +269,27 @@ export class PurchaseService {
       filter.country = { $regex: new RegExp(country, 'i') };
     }
 
-    console.log('Filter used:', JSON.stringify(filter, null, 2));
+    return filter;
+  }
+
+  async filterPurchases(
+    page: number,
+    pageSize: number,
+    startDate?: Date, // Change to Date
+    endDate?: Date, // Change to Date
+    websiteName?: string,
+    cardType?: string,
+    destination?: string,
+    country?: string,
+  ): Promise<CommonPaginationResponse<any>> {
+    const filter = this.buildFilter(
+      startDate,
+      endDate,
+      websiteName,
+      cardType,
+      destination,
+      country,
+    );
 
     const skip = (page - 1) * pageSize;
     const count = await this.PurchaseModel.countDocuments(filter);
@@ -354,39 +373,14 @@ export class PurchaseService {
     destination?: string,
     country?: string,
   ): Promise<any> {
-    const filter: any = {};
-
-    if (
-      startDate instanceof Date &&
-      !isNaN(startDate.getTime()) &&
-      endDate instanceof Date &&
-      !isNaN(endDate.getTime())
-    ) {
-      filter.purchaseDate = { $gte: startDate, $lte: endDate };
-    } else {
-      if (startDate instanceof Date && !isNaN(startDate.getTime())) {
-        filter.purchaseDate = { $gte: startDate };
-      }
-      if (endDate instanceof Date && !isNaN(endDate.getTime())) {
-        filter.purchaseDate = { ...(filter.purchaseDate || {}), $lte: endDate };
-      }
-    }
-
-    if (websiteName) {
-      filter.websiteUrl = { $regex: new RegExp(websiteName, 'i') };
-    }
-
-    if (cardType) {
-      filter.cardType = { $regex: new RegExp(cardType, 'i') };
-    }
-
-    if (destination) {
-      filter.destination = { $regex: new RegExp(destination, 'i') };
-    }
-
-    if (country) {
-      filter.country = { $regex: new RegExp(country, 'i') };
-    }
+    const filter = this.buildFilter(
+      startDate,
+      endDate,
+      websiteName,
+      cardType,
+      destination,
+      country,
+    );
 
     const purchases = await this.PurchaseModel.find(filter)
       .sort({ purchaseDate: 1 })
@@ -409,40 +403,14 @@ export class PurchaseService {
     destination?: string,
     country?: string,
   ): Promise<any> {
-    const filter: any = {};
-
-    // Apply the filtering logic for purchase date, website, cardType, etc.
-    if (
-      startDate instanceof Date &&
-      !isNaN(startDate.getTime()) &&
-      endDate instanceof Date &&
-      !isNaN(endDate.getTime())
-    ) {
-      filter.purchaseDate = { $gte: startDate, $lte: endDate };
-    } else {
-      if (startDate instanceof Date && !isNaN(startDate.getTime())) {
-        filter.purchaseDate = { $gte: startDate };
-      }
-      if (endDate instanceof Date && !isNaN(endDate.getTime())) {
-        filter.purchaseDate = { ...(filter.purchaseDate || {}), $lte: endDate };
-      }
-    }
-
-    if (websiteName) {
-      filter.websiteUrl = { $regex: new RegExp(websiteName, 'i') };
-    }
-
-    if (cardType) {
-      filter.cardType = { $regex: new RegExp(cardType, 'i') };
-    }
-
-    if (destination) {
-      filter.destination = { $regex: new RegExp(destination, 'i') };
-    }
-
-    if (country) {
-      filter.country = { $regex: new RegExp(country, 'i') };
-    }
+    const filter = this.buildFilter(
+      startDate,
+      endDate,
+      websiteName,
+      cardType,
+      destination,
+      country,
+    );
 
     // Fetch the filtered purchases
     const purchases = await this.PurchaseModel.find(filter)
@@ -459,11 +427,6 @@ export class PurchaseService {
       'advance',
       'grossProfit',
     ];
-
-    // Function to remove currency symbols
-    const removeCurrencySymbols = (value: string): string => {
-      return value.replace(/[^\d.]/g, ''); // Removes everything except digits and decimals
-    };
 
     // Clean the purchases data
     const cleanedPurchases = purchases.map((purchase) => {
@@ -493,10 +456,9 @@ export class PurchaseService {
   }
 
   async updatePurchase(
-    this: any, // PurchaseService instance
     orderId: string,
     orderItemIndex: number,
-    updatePurchaseDto: any, //
+    updatePurchaseDto: UpdatePurchaseDto,
   ): Promise<PurchaseDocument> {
     // Construct the query and update objects
     const query = { orderId, orderItemIndex };
@@ -547,11 +509,10 @@ export class PurchaseService {
     return updatedPurchase;
   }
   async updatePurchaseStatus(
-    this: any, // PurchaseService instance
     orderId: string,
     orderItemIndex: number,
-    updatePurchaseDto: any, // your UpdatePurchaseDto
-  ) {
+    updatePurchaseDto: UpdatePurchaseDto,
+  ): Promise<PurchaseDocument> {
     const query = { orderId, orderItemIndex };
 
     const update = {
@@ -583,7 +544,9 @@ export class PurchaseService {
 
     // ── NEW: when delivered, record profit and refresh shipment ──────────────────
     if (updatePurchaseDto.status === 'Delivered') {
-      await this.shipmentService.onPurchaseDelivered(updatedPurchase);
+      await this.shipmentService.onPurchaseDelivered(
+        updatedPurchase as unknown as ShipmentPurchaseDocument,
+      );
     }
 
     return updatedPurchase;
