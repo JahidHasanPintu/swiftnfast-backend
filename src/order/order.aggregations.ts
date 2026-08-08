@@ -19,16 +19,27 @@ export function buildOrderGroupingStages(): PipelineStage.FacetPipelineStage[] {
     },
     {
       $addFields: {
+        statuses: {
+          $map: {
+            input: '$orders.status',
+            as: 's',
+            in: { $toLower: { $ifNull: [{ $toString: '$$s' }, ''] } },
+          },
+        },
+      },
+    },
+    {
+      $addFields: {
         calculatedStatus: {
           $cond: {
-            if: { $in: ['Pending', '$orders.status'] },
+            if: { $in: ['pending', '$statuses'] },
             then: 'Pending',
             else: {
               $cond: {
                 if: {
                   $and: [
-                    { $in: ['Cancelled', '$orders.status'] },
-                    { $not: { $in: ['Pending', '$orders.status'] } },
+                    { $in: ['cancelled', '$statuses'] },
+                    { $not: { $in: ['pending', '$statuses'] } },
                   ],
                 },
                 then: 'Cancelled',
