@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import axios from 'axios';
@@ -30,7 +34,10 @@ export class PaymentService {
   }
 
   async getAllPayments() {
-    const payments = await this.paymentModel.find().sort({ createdAt: -1 }).exec();
+    const payments = await this.paymentModel
+      .find()
+      .sort({ createdAt: -1 })
+      .exec();
     return payments.map((p: any) => this.sanitize(p));
   }
 
@@ -47,7 +54,10 @@ export class PaymentService {
   async getAccessToken() {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     const cached = await this.settingsService.getByKey('bkash_token');
-    if (cached?.value && new Date(cached.updatedAt ?? cached.updated_at) > oneHourAgo) {
+    if (
+      cached?.value &&
+      new Date(cached.updatedAt ?? cached.updated_at) > oneHourAgo
+    ) {
       return cached.value;
     }
 
@@ -99,13 +109,17 @@ export class PaymentService {
       merchantInvoiceNumber: invoiceNumber,
     };
 
-    const response = await axios.post(`${baseUrl}/checkout/create`, paymentData, {
-      headers: {
-        authorization: token,
-        'x-app-key': process.env.BKASH_APP_KEY,
-        'Content-Type': 'application/json',
+    const response = await axios.post(
+      `${baseUrl}/checkout/create`,
+      paymentData,
+      {
+        headers: {
+          authorization: token,
+          'x-app-key': process.env.BKASH_APP_KEY,
+          'Content-Type': 'application/json',
+        },
       },
-    });
+    );
 
     const { paymentID, bkashURL } = response.data;
 
@@ -123,7 +137,11 @@ export class PaymentService {
   }
 
   private clientUrl() {
-    return process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:3000';
+    return (
+      process.env.CLIENT_URL ||
+      process.env.FRONTEND_URL ||
+      'http://localhost:3000'
+    );
   }
 
   private backendUrl() {
@@ -172,13 +190,15 @@ export class PaymentService {
         },
       );
       const data = response.data;
-      const completed = data.statusCode === '0000' && data.transactionStatus === 'Completed';
+      const completed =
+        data.statusCode === '0000' && data.transactionStatus === 'Completed';
       await this.paymentModel
         .updateOne(
           { paymentId: paymentID },
           {
             $set: {
-              transactionStatus: data.transactionStatus || (completed ? 'Completed' : 'failed'),
+              transactionStatus:
+                data.transactionStatus || (completed ? 'Completed' : 'failed'),
               transactionId: data.trxID,
               statusCode: data.statusCode,
               statusMessage: data.statusMessage,
@@ -190,7 +210,9 @@ export class PaymentService {
         .exec();
       return completed
         ? `${this.clientUrl()}/payment-success`
-        : `${this.clientUrl()}/payment-failed?reason=${encodeURIComponent(data.statusMessage)}`;
+        : `${this.clientUrl()}/payment-failed?reason=${encodeURIComponent(
+            data.statusMessage,
+          )}`;
     } catch (error) {
       console.error('Execute error:', error?.response?.data || error);
       return `${this.backendUrl()}/api/v1/payment/bkash/query?paymentID=${paymentID}`;
@@ -222,7 +244,8 @@ export class PaymentService {
           { paymentId: paymentID },
           {
             $set: {
-              transactionStatus: data.transactionStatus || (completed ? 'Completed' : 'failed'),
+              transactionStatus:
+                data.transactionStatus || (completed ? 'Completed' : 'failed'),
               transactionId: data.trxID,
               statusCode: data.statusCode,
               statusMessage: data.statusMessage,
@@ -234,14 +257,20 @@ export class PaymentService {
         .exec();
       return completed
         ? `${this.clientUrl()}/payment-success`
-        : `${this.clientUrl()}/payment-failed?reason=${encodeURIComponent(data.statusMessage)}`;
+        : `${this.clientUrl()}/payment-failed?reason=${encodeURIComponent(
+            data.statusMessage,
+          )}`;
     } catch (error) {
       console.error('Query failed:', error?.response?.data || error);
       return `${this.clientUrl()}/payment-failed?reason=query_error`;
     }
   }
 
-  async refundPayment(body: { trxID: string; paymentID: string; amount: string }) {
+  async refundPayment(body: {
+    trxID: string;
+    paymentID: string;
+    amount: string;
+  }) {
     const { trxID, paymentID, amount } = body;
     const token = await this.getAccessToken();
     const baseUrl = process.env.BKASH_BASE_URL;

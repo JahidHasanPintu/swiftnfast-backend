@@ -5,7 +5,9 @@ import { generateImageUrl } from '../utils/image-url.util';
 
 @Injectable()
 export class StorefrontCategoryService {
-  constructor(@InjectModel('Category') private readonly categoryModel: Model<any>) {}
+  constructor(
+    @InjectModel('Category') private readonly categoryModel: Model<any>,
+  ) {}
 
   private serialize(doc: any) {
     const obj = doc.toObject ? doc.toObject() : doc;

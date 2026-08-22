@@ -24,7 +24,8 @@ function sanitizeUser(user: Pfu2UserDocument) {
 export class StorefrontAuthService {
   private readonly logger = new Logger('StorefrontAuth');
   constructor(
-    @InjectModel('Pfu2User') private readonly userModel: Model<Pfu2UserDocument>,
+    @InjectModel('Pfu2User')
+    private readonly userModel: Model<Pfu2UserDocument>,
     private readonly jwtService: StorefrontJwtService,
   ) {}
 
@@ -61,7 +62,9 @@ export class StorefrontAuthService {
       throw new BadRequestException('User does not exist');
     }
     if (!user.isVerified) {
-      throw new BadRequestException('Please verify your email before logging in');
+      throw new BadRequestException(
+        'Please verify your email before logging in',
+      );
     }
     const ok = await bcrypt.compare(body.password, user.password);
     if (!ok) {
@@ -104,7 +107,9 @@ export class StorefrontAuthService {
       throw new BadRequestException('Invalid OTP');
     }
     if (!user.otpExpiry || user.otpExpiry.getTime() < Date.now()) {
-      throw new BadRequestException('OTP has expired. Please request a new OTP');
+      throw new BadRequestException(
+        'OTP has expired. Please request a new OTP',
+      );
     }
     user.otp = undefined;
     user.otpExpiry = undefined;

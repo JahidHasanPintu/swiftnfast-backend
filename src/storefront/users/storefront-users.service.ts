@@ -19,7 +19,8 @@ function sanitizeUser(user: any) {
 @Injectable()
 export class StorefrontUsersService {
   constructor(
-    @InjectModel('Pfu2User') private readonly userModel: Model<Pfu2UserDocument>,
+    @InjectModel('Pfu2User')
+    private readonly userModel: Model<Pfu2UserDocument>,
   ) {}
 
   async getProfile(userId: string) {
@@ -47,8 +48,10 @@ export class StorefrontUsersService {
     const skip = (page - 1) * limit;
 
     const filter: Record<string, any> = { isDeleted: { $ne: true } };
-    if (query.email) filter.email = { $regex: String(query.email), $options: 'i' };
-    if (query.phone) filter.phone = { $regex: String(query.phone), $options: 'i' };
+    if (query.email)
+      filter.email = { $regex: String(query.email), $options: 'i' };
+    if (query.phone)
+      filter.phone = { $regex: String(query.phone), $options: 'i' };
     if (query.role) filter.role = query.role;
     if (query.status) filter.status = query.status;
 
@@ -91,7 +94,9 @@ export class StorefrontUsersService {
 
   async updateUser(id: string, body: any) {
     const update = await this.buildUpdate(body);
-    const user = await this.userModel.findByIdAndUpdate(id, update, { new: true }).exec();
+    const user = await this.userModel
+      .findByIdAndUpdate(id, update, { new: true })
+      .exec();
     if (!user) throw new NotFoundException('User not found');
     return sanitizeUser(user);
   }

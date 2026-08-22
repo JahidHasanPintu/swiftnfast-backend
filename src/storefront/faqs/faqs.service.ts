@@ -19,7 +19,12 @@ export class FaqsService {
     }
 
     const [rows, total] = await Promise.all([
-      this.faqModel.find(filter).sort({ order: 1 }).skip(skip).limit(limit).exec(),
+      this.faqModel
+        .find(filter)
+        .sort({ order: 1 })
+        .skip(skip)
+        .limit(limit)
+        .exec(),
       this.faqModel.countDocuments(filter).exec(),
     ]);
     return {

@@ -27,7 +27,11 @@ export class StorefrontProductController {
   @Get('search')
   async search(@Query('q') q?: string) {
     if (!q || String(q).length < 2) {
-      return { success: false, message: 'Search query `q` is required', data: [] };
+      return {
+        success: false,
+        message: 'Search query `q` is required',
+        data: [],
+      };
     }
     const data = await this.productService.search(q);
     return { success: true, message: 'Search results', data };
@@ -36,7 +40,11 @@ export class StorefrontProductController {
   @Get('brands')
   async brands(@Query('category') category?: string) {
     const data = await this.productService.findUniqueBrands(category);
-    return { success: true, message: 'Unique brands retrieved successfully', data };
+    return {
+      success: true,
+      message: 'Unique brands retrieved successfully',
+      data,
+    };
   }
 
   @Get('slug/:slug')

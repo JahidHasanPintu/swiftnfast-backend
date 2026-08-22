@@ -1,9 +1,4 @@
-import {
-  Body,
-  Controller,
-  HttpCode,
-  Post,
-} from '@nestjs/common';
+import { Body, Controller, HttpCode, Post } from '@nestjs/common';
 import { Public } from 'src/common/decorators/public.decorator';
 import { StorefrontAuthService } from './storefront-auth.service';
 
@@ -32,11 +27,14 @@ export class StorefrontAuthController {
 
   @Post('register')
   @HttpCode(201)
-  async register(@Body() body: { name: string; email: string; password: string }) {
+  async register(
+    @Body() body: { name: string; email: string; password: string },
+  ) {
     await this.authService.register(body);
     return {
       success: true,
-      message: 'Registration successful. Please check your email to verify your account.',
+      message:
+        'Registration successful. Please check your email to verify your account.',
       data: null,
     };
   }

@@ -11,6 +11,7 @@ import { CartModule } from './cart/cart.module';
 import { AddressModule } from './addresses/address.module';
 import { PaymentModule } from './payment/payment.module';
 import { StorefrontOrdersModule } from './orders/storefront-orders.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { StorefrontOrdersModule } from './orders/storefront-orders.module';
     AddressModule,
     PaymentModule,
     StorefrontOrdersModule,
+    AdminModule,
   ],
 })
 export class StorefrontModule {}

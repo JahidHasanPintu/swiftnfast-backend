@@ -13,7 +13,10 @@ export class StorefrontBrandService {
   }
 
   async findAll() {
-    const rows = await this.brandModel.find({ isActive: true }).sort({ name: 1 }).exec();
+    const rows = await this.brandModel
+      .find({ isActive: true })
+      .sort({ name: 1 })
+      .exec();
     return rows.map((r) => this.serialize(r));
   }
 

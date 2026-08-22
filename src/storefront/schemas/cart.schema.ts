@@ -7,7 +7,11 @@ export const CartItemSchema = new mongoose.Schema(
     image: { type: String },
     quantity: { type: Number, required: true },
     price: { type: mongoose.Schema.Types.Mixed },
-    type: { type: String, enum: ['product', 'outside_order'], default: 'product' },
+    type: {
+      type: String,
+      enum: ['product', 'outside_order'],
+      default: 'product',
+    },
     ssImageUrl: { type: String },
     isPriceUpdated: { type: Boolean },
     priceManuallyUpdated: { type: Boolean, default: false },

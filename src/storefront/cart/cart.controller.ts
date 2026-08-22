@@ -9,21 +9,102 @@ import {
   Query,
   Req,
   UseGuards,
+  UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Public } from 'src/common/decorators/public.decorator';
-import { StorefrontOptionalAuthGuard, StorefrontAuthGuard } from '../auth/storefront-auth.guards';
+import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { StorageService } from 'src/storage/storage.service';
+import {
+  StorefrontOptionalAuthGuard,
+  StorefrontAuthGuard,
+} from '../auth/storefront-auth.guards';
 import { StorefrontRequest } from '../auth/storefront-request.interface';
 import { CartService } from './cart.service';
 
 @Public()
 @Controller('api/v1')
 export class CartController {
-  constructor(private readonly cartService: CartService) {}
+  constructor(
+    private readonly cartService: CartService,
+    private readonly storageService: StorageService,
+  ) {}
 
   private identity(req: StorefrontRequest) {
     return { userId: req.user?.userId, guestToken: req.guestToken };
   }
+
+  // NOTE: static path segments are declared before `:param` routes so
+  // Express resolves them correctly (e.g. /cart/requested vs /cart/:id).
+
+  // ---- Admin price-request queue (SwiftNFast admin JWT) -------------------
+
+  @Get('cart/requested')
+  @UseGuards(JwtAuthGuard)
+  async requested(@Query() query: any) {
+    const result = await this.cartService.getRequestedCarts(query);
+    return {
+      success: true,
+      message: 'Carts retrieved successfully',
+      data: result.carts,
+      meta: {
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+        totalPages: result.totalPages,
+        hasNextPage: result.hasNextPage,
+      },
+    };
+  }
+
+  @Get('cart/requested-cart-count')
+  @UseGuards(JwtAuthGuard)
+  async requestedCount() {
+    const data = await this.cartService.getRequestedCartCount();
+    return {
+      success: true,
+      message: 'Requested cart and order count retrieved successfully',
+      data,
+    };
+  }
+
+  @Patch('cart/:id/update-item')
+  @UseGuards(JwtAuthGuard)
+  async updateItem(@Param('id') id: string, @Body() body: any) {
+    const data = await this.cartService.updateItem(id, body);
+    return { success: true, message: 'Cart item updated successfully', data };
+  }
+
+  @Patch('cart/:id/upload-ss-image')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('screenshot'))
+  async uploadSsImage(
+    @Param('id') id: string,
+    @Body() body: any,
+    @UploadedFile() file: any,
+  ) {
+    let stored: string | undefined = body?.ssImageUrl;
+    if (file?.buffer) {
+      const optimized = await this.storageService.optimizeImage(
+        file.buffer,
+        600,
+      );
+      const result: any = await this.storageService.uploadFile(
+        optimized,
+        'screenshots',
+      );
+      stored = result.secure_url || result.url || file.originalname;
+    }
+    const data = await this.cartService.uploadSsImage(id, body, stored);
+    return {
+      success: true,
+      message: 'Product price screenshot updated successfully',
+      data,
+    };
+  }
+
+  // ---- Customer-facing cart (storefront token / guest token) --------------
 
   @Get('mycart')
   @UseGuards(StorefrontOptionalAuthGuard)
@@ -47,71 +128,54 @@ export class CartController {
     return { success: true, message: 'Cart merged successfully', data };
   }
 
-  @Get('carts/requested')
-  @UseGuards(StorefrontAuthGuard)
-  async requested(@Query() query: any) {
-    const result = await this.cartService.getRequestedCarts(query);
-    return {
-      success: true,
-      data: result.carts,
-      meta: {
-        total: result.total,
-        page: result.page,
-        limit: result.limit,
-        totalPages: result.totalPages,
-        hasNextPage: result.hasNextPage,
-      },
-    };
+  // singular `/cart/*` aliases matching the pfu2 contract exactly (§4)
+  @Get('cart/mycart')
+  @UseGuards(StorefrontOptionalAuthGuard)
+  async myCartAlias(@Req() req: StorefrontRequest) {
+    return this.myCart(req);
   }
 
-  @Get('carts/requested-cart-count')
-  @UseGuards(StorefrontAuthGuard)
-  async requestedCount() {
-    const data = await this.cartService.getRequestedCartCount();
-    return { success: true, data };
+  @Post('cart/add-item')
+  @UseGuards(StorefrontOptionalAuthGuard)
+  async addItemAlias(@Req() req: StorefrontRequest, @Body() body: any) {
+    return this.addItem(req, body);
   }
 
-  @Get('carts/:id')
+  @Post('cart/merge')
+  @UseGuards(StorefrontAuthGuard)
+  async mergeAlias(@Req() req: StorefrontRequest) {
+    return this.merge(req);
+  }
+
+  @Delete('cart/user/:userId/clear')
+  @UseGuards(StorefrontAuthGuard)
+  async clearUser(@Param('userId') userId: string) {
+    const data = await this.cartService.clearUserCart(userId);
+    return { success: true, message: 'Cart cleared successfully', data };
+  }
+
+  @Get('cart/:id')
   @UseGuards(StorefrontOptionalAuthGuard)
   async getById(@Param('id') id: string) {
     const data = await this.cartService.getById(id);
     return { success: true, data };
   }
 
-  @Patch('carts/:id/update-item')
-  @UseGuards(StorefrontOptionalAuthGuard)
-  async updateItem(@Param('id') id: string, @Body() body: any) {
-    const data = await this.cartService.updateItem(id, body);
-    return { success: true, message: 'Cart item updated', data };
-  }
-
-  @Patch('carts/:id/update-quantity')
+  @Patch('cart/:id/update-quantity')
   @UseGuards(StorefrontOptionalAuthGuard)
   async updateQuantity(@Param('id') id: string, @Body() body: any) {
     const data = await this.cartService.updateQuantity(id, body);
     return { success: true, message: 'Quantity updated', data };
   }
 
-  @Patch('carts/:id/upload-ss-image')
-  @UseGuards(StorefrontOptionalAuthGuard)
-  async uploadSsImage(
-    @Param('id') id: string,
-    @Body() body: any,
-    @UploadedFile() file: any,
-  ) {
-    const filename = file?.filename || file?.originalname || body?.ssImageUrl;
-    const data = await this.cartService.uploadSsImage(id, body, filename);
-    return { success: true, message: 'Screenshot uploaded', data };
-  }
-
-  @Patch('carts/:id/request-price')
+  @Patch('cart/:id/request-price')
   @UseGuards(StorefrontOptionalAuthGuard)
   async requestPrice(@Param('id') id: string, @Body() body: any) {
     const data = await this.cartService.requestPrice(id, body);
-    return { success: true, message: 'Price request submitted', data };
+    return { success: true, message: 'Price Request Submitted', data };
   }
 
-  @Delete('carts/:id/remove-item/:productType/:productId')
+  @Delete('cart/:id/remove-item/:productType/:productId')
   @UseGuards(StorefrontOptionalAuthGuard)
   async removeItem(
     @Param('id') id: string,
@@ -122,21 +186,14 @@ export class CartController {
     return { success: true, message: 'Item removed from cart', data };
   }
 
-  @Delete('carts/:id/clear')
+  @Delete('cart/:id/clear')
   @UseGuards(StorefrontOptionalAuthGuard)
   async clear(@Param('id') id: string) {
     const data = await this.cartService.clearCart(id);
-    return { success: true, message: 'Cart cleared', data };
+    return { success: true, message: 'Cart cleared successfully', data };
   }
 
-  @Delete('carts/user/:userId/clear')
-  @UseGuards(StorefrontAuthGuard)
-  async clearUser(@Param('userId') userId: string) {
-    const data = await this.cartService.clearUserCart(userId);
-    return { success: true, message: 'User cart cleared', data };
-  }
-
-  @Delete('carts/:id')
+  @Delete('cart/:id')
   @UseGuards(StorefrontAuthGuard)
   async delete(@Param('id') id: string) {
     await this.cartService.delete(id);

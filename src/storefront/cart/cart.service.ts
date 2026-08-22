@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { CartDocument } from '../interfaces/cart.interface';
@@ -22,9 +26,17 @@ function toFixed2(n: number): number {
   return Number((Math.round(n * 100) / 100).toFixed(2));
 }
 
-function calculateCartTotals(items: any[], pfu2Charge = 1000, discount = 0, taxPct = 0) {
+function calculateCartTotals(
+  items: any[],
+  pfu2Charge = 1000,
+  discount = 0,
+  taxPct = 0,
+) {
   const itemPrice = toFixed2(
-    items.reduce((acc, it) => acc + (Number(it.price) || 0) * (Number(it.quantity) || 0), 0),
+    items.reduce(
+      (acc, it) => acc + (Number(it.price) || 0) * (Number(it.quantity) || 0),
+      0,
+    ),
   );
   const tax = toFixed2(itemPrice * (taxPct / 100));
   const totalPrice = toFixed2(itemPrice + tax + pfu2Charge - discount);
@@ -88,7 +100,10 @@ export class CartService {
       } else {
         let product = null;
         if (item.productId) {
-          product = await this.productModel.findById(item.productId).lean().exec();
+          product = await this.productModel
+            .findById(item.productId)
+            .lean()
+            .exec();
         }
         if (product) {
           product = {
@@ -98,7 +113,9 @@ export class CartService {
             shortDescription: product.shortDescription,
             discountPrice: product.discountPrice,
             images: Array.isArray(product.images)
-              ? product.images.map((i: string) => generateImageUrl('products', i))
+              ? product.images.map((i: string) =>
+                  generateImageUrl('products', i),
+                )
               : [],
             slug: product.slug,
           };
@@ -107,7 +124,9 @@ export class CartService {
       }
     }
 
-    const outsideItems = enrichedItems.filter((i) => i.type === 'outside_order');
+    const outsideItems = enrichedItems.filter(
+      (i) => i.type === 'outside_order',
+    );
     const readyToOrder =
       outsideItems.length === 0 ||
       outsideItems.every((i) => i.priceManuallyUpdated === true);
@@ -123,9 +142,14 @@ export class CartService {
     };
   }
 
-  private async findOrCreate(identity: { userId?: string; guestToken?: string }) {
+  private async findOrCreate(identity: {
+    userId?: string;
+    guestToken?: string;
+  }) {
     if (identity.userId) {
-      let cart = await this.cartModel.findOne({ userId: identity.userId }).exec();
+      let cart = await this.cartModel
+        .findOne({ userId: identity.userId })
+        .exec();
       if (!cart) {
         cart = new this.cartModel({
           userId: identity.userId,
@@ -141,7 +165,9 @@ export class CartService {
       return cart;
     }
     if (identity.guestToken) {
-      let cart = await this.cartModel.findOne({ guestToken: identity.guestToken }).exec();
+      let cart = await this.cartModel
+        .findOne({ guestToken: identity.guestToken })
+        .exec();
       if (!cart) {
         cart = new this.cartModel({
           guestToken: identity.guestToken,
@@ -191,13 +217,17 @@ export class CartService {
     const cart = await this.findOrCreate(identity);
     const type = body.type || 'product';
     if (type === 'outside_order') {
-      if (!body.productId) throw new BadRequestException('Product ID is required');
+      if (!body.productId)
+        throw new BadRequestException('Product ID is required');
     } else {
-      const product = await this.productModel.findById(body.productId).lean().exec();
+      const product = await this.productModel
+        .findById(body.productId)
+        .lean()
+        .exec();
       if (!product) throw new NotFoundException('Product not found');
     }
 
-    let items = parseItems(cart.items);
+    const items = parseItems(cart.items);
     const qty = Number(body.quantity) || 1;
     const price = toFixed2(Number(body.price) || 0);
     const idx = items.findIndex(
@@ -217,7 +247,12 @@ export class CartService {
       });
     }
 
-    const totals = calculateCartTotals(items, cart.pfu2Charge, cart.discount, 0);
+    const totals = calculateCartTotals(
+      items,
+      cart.pfu2Charge,
+      cart.discount,
+      0,
+    );
     cart.items = items;
     cart.itemPrice = totals.itemPrice;
     cart.tax = totals.tax;
@@ -229,12 +264,18 @@ export class CartService {
 
   async updateItem(
     id: string,
-    body: { productId: string; quantity?: number; price?: number; finalPrice?: number; type?: string },
+    body: {
+      productId: string;
+      quantity?: number;
+      price?: number;
+      finalPrice?: number;
+      type?: string;
+    },
   ) {
     const cart = await this.cartModel.findById(id).exec();
     if (!cart) throw new NotFoundException('Cart not found');
     const type = body.type || 'product';
-    let items = parseItems(cart.items);
+    const items = parseItems(cart.items);
     const idx = items.findIndex(
       (it: any) =>
         String(it.productId) === String(body.productId) &&
@@ -245,7 +286,8 @@ export class CartService {
     if (body.price !== undefined) {
       const p = toFixed2(Number(body.price));
       items[idx].price = p;
-      items[idx].finalPrice = body.finalPrice !== undefined ? toFixed2(Number(body.finalPrice)) : p;
+      items[idx].finalPrice =
+        body.finalPrice !== undefined ? toFixed2(Number(body.finalPrice)) : p;
       items[idx].priceManuallyUpdated = true;
     } else if (body.finalPrice !== undefined) {
       items[idx].finalPrice = toFixed2(Number(body.finalPrice));
@@ -260,7 +302,12 @@ export class CartService {
       }
     }
 
-    const totals = calculateCartTotals(items, cart.pfu2Charge, cart.discount, 0);
+    const totals = calculateCartTotals(
+      items,
+      cart.pfu2Charge,
+      cart.discount,
+      0,
+    );
     cart.items = items;
     cart.itemPrice = totals.itemPrice;
     cart.tax = totals.tax;
@@ -269,14 +316,17 @@ export class CartService {
     return this.enrich(cart);
   }
 
-  async updateQuantity(id: string, body: { productId: string; type?: string; delta: number }) {
+  async updateQuantity(
+    id: string,
+    body: { productId: string; type?: string; delta: number },
+  ) {
     if (!body.productId || typeof body.delta !== 'number') {
       throw new BadRequestException('Product ID and delta are required');
     }
     const cart = await this.cartModel.findById(id).exec();
     if (!cart) throw new NotFoundException('Cart not found');
     const type = body.type || 'product';
-    let items = parseItems(cart.items);
+    const items = parseItems(cart.items);
     const idx = items.findIndex(
       (it: any) =>
         String(it.productId) === String(body.productId) &&
@@ -284,9 +334,15 @@ export class CartService {
     );
     if (idx < 0) throw new NotFoundException('Cart item not found');
     const next = Number(items[idx].quantity) + Number(body.delta);
-    if (next < 1) throw new BadRequestException('Quantity cannot be less than 1');
+    if (next < 1)
+      throw new BadRequestException('Quantity cannot be less than 1');
     items[idx].quantity = next;
-    const totals = calculateCartTotals(items, cart.pfu2Charge, cart.discount, 0);
+    const totals = calculateCartTotals(
+      items,
+      cart.pfu2Charge,
+      cart.discount,
+      0,
+    );
     cart.items = items;
     cart.itemPrice = totals.itemPrice;
     cart.tax = totals.tax;
@@ -317,7 +373,10 @@ export class CartService {
     return this.enrich(cart);
   }
 
-  async requestPrice(id: string, body: { isRequested?: boolean; guestContact?: string }) {
+  async requestPrice(
+    id: string,
+    body: { isRequested?: boolean; guestContact?: string },
+  ) {
     const cart = await this.cartModel.findById(id).exec();
     if (!cart) return null;
     cart.isRequested = body.isRequested === true;
@@ -336,7 +395,12 @@ export class CartService {
           (it.type || 'product') === (productType || 'product')
         ),
     );
-    const totals = calculateCartTotals(items, cart.pfu2Charge, cart.discount, 0);
+    const totals = calculateCartTotals(
+      items,
+      cart.pfu2Charge,
+      cart.discount,
+      0,
+    );
     cart.items = items;
     cart.itemPrice = totals.itemPrice;
     cart.tax = totals.tax;
@@ -372,12 +436,13 @@ export class CartService {
   }
 
   async mergeGuestToUser(userId: string, guestToken?: string) {
-    if (!guestToken) throw new BadRequestException('Missing user ID or guest token');
+    if (!guestToken)
+      throw new BadRequestException('Missing user ID or guest token');
     const guestCart = await this.cartModel.findOne({ guestToken }).exec();
     if (!guestCart) return;
     const guestItems = parseItems(guestCart.items);
 
-    let userCart = await this.cartModel.findOne({ userId }).exec();
+    const userCart = await this.cartModel.findOne({ userId }).exec();
     if (!userCart) {
       guestCart.userId = userId as any;
       guestCart.guestToken = undefined as any;
@@ -385,7 +450,7 @@ export class CartService {
       return;
     }
 
-    let userItems = parseItems(userCart.items);
+    const userItems = parseItems(userCart.items);
     for (const gItem of guestItems) {
       const type = gItem.type || 'product';
       const idx = userItems.findIndex(
@@ -394,12 +459,18 @@ export class CartService {
           (it.type || 'product') === type,
       );
       if (idx >= 0) {
-        userItems[idx].quantity = Number(userItems[idx].quantity) + Number(gItem.quantity);
+        userItems[idx].quantity =
+          Number(userItems[idx].quantity) + Number(gItem.quantity);
       } else {
         userItems.push(gItem);
       }
     }
-    const totals = calculateCartTotals(userItems, userCart.pfu2Charge, userCart.discount, 0);
+    const totals = calculateCartTotals(
+      userItems,
+      userCart.pfu2Charge,
+      userCart.discount,
+      0,
+    );
     userCart.items = userItems;
     userCart.itemPrice = totals.itemPrice;
     userCart.tax = totals.tax;
@@ -428,7 +499,10 @@ export class CartService {
 
     // mark unread requested carts as read
     await this.cartModel
-      .updateMany({ isRequested: true, isRead: false }, { $set: { isRead: true } })
+      .updateMany(
+        { isRequested: true, isRead: false },
+        { $set: { isRead: true } },
+      )
       .exec();
 
     const data = [];
@@ -446,7 +520,9 @@ export class CartService {
   }
 
   async getRequestedCartCount() {
-    const cartCount = await this.cartModel.countDocuments({ isRequested: true }).exec();
+    const cartCount = await this.cartModel
+      .countDocuments({ isRequested: true })
+      .exec();
     // orderCount mirrors pfu2: count of requested carts (no separate order notion here)
     const orderCount = cartCount;
     return { cartCount, orderCount };

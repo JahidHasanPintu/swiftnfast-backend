@@ -58,7 +58,8 @@ export class StorefrontOrdersService {
 
     const shipping = body.shipping || cart.shippingAddress || {};
     const shippingName = shipping.name;
-    const shippingPhone = shipping.phone || body.guestContact || cart.guestContact;
+    const shippingPhone =
+      shipping.phone || body.guestContact || cart.guestContact;
     const shippingEmail = shipping.email || body.guestEmail;
     const shippingAddressText = shipping.shippingAddress || shipping.address;
 
@@ -72,7 +73,9 @@ export class StorefrontOrdersService {
       },
     );
 
-    const userId = body.userId ? new mongoose.Types.ObjectId(body.userId) : undefined;
+    const userId = body.userId
+      ? new mongoose.Types.ObjectId(body.userId)
+      : undefined;
 
     const lineItems = [];
     for (let i = 0; i < rawItems.length; i++) {
@@ -84,19 +87,24 @@ export class StorefrontOrdersService {
       let productId;
       let prodDesc = item.name;
       let productSourcedFrom;
-      let color = item.color;
-      let size = item.size;
+      const color = item.color;
+      const size = item.size;
       if (type === 'product' && item.productId) {
         try {
           productId = new mongoose.Types.ObjectId(String(item.productId));
-          const product: any = await this.productModel.findById(item.productId).lean().exec();
+          const product: any = await this.productModel
+            .findById(item.productId)
+            .lean()
+            .exec();
           if (product) prodDesc = product.name;
         } catch {
           productId = undefined;
         }
       } else {
         productSourcedFrom = item.productSourcedFrom;
-        prodDesc = item.name || `${item.productSourcedFrom || 'Imported'} sourced product`;
+        prodDesc =
+          item.name ||
+          `${item.productSourcedFrom || 'Imported'} sourced product`;
       }
 
       lineItems.push({
@@ -117,7 +125,8 @@ export class StorefrontOrdersService {
         color,
         size,
         uniPrice: uni,
-        totalPrice: item.finalPrice != null ? toNumber(item.finalPrice) : uni * qty,
+        totalPrice:
+          item.finalPrice != null ? toNumber(item.finalPrice) : uni * qty,
         advancePayment: undefined,
         remainingAmount: undefined,
         orderNotes: item.notes,
@@ -201,7 +210,10 @@ export class StorefrontOrdersService {
     const syntheticContact = `OUT-${Date.now()}`;
     if (body.userId) {
       userId = new mongoose.Types.ObjectId(body.userId);
-      const user: any = await this.userModel.findById(body.userId).lean().exec();
+      const user: any = await this.userModel
+        .findById(body.userId)
+        .lean()
+        .exec();
       if (user) {
         customer = await this.orderService.findOrCreateCustomerByContact(
           user.phone || syntheticContact,
@@ -297,12 +309,16 @@ export class StorefrontOrdersService {
       .filter((d) => d.productId)
       .map((d) => String(d.productId));
     const products = productIds.length
-      ? await this.productModel.find({ _id: { $in: productIds } }).lean().exec()
+      ? await this.productModel
+          .find({ _id: { $in: productIds } })
+          .lean()
+          .exec()
       : [];
     const productById = new Map(products.map((p: any) => [String(p._id), p]));
 
     return docs.map((d) => {
       const base: any = {
+        id: d._id,
         productId: d.productId,
         productUrl: d.productUrl,
         name: d.prodDesc,
@@ -315,6 +331,9 @@ export class StorefrontOrdersService {
         notes: d.orderNotes,
         ssImageUrl: d.ssImageUrl
           ? generateImageUrl('screenshots', d.ssImageUrl)
+          : undefined,
+        productImageUrl: d.productImageUrl
+          ? generateImageUrl('screenshots', d.productImageUrl)
           : undefined,
         productSourcedFrom: d.productSourcedFrom,
         approximatePrice: d.approximatePrice,
@@ -437,6 +456,24 @@ export class StorefrontOrdersService {
     if (query.userId) filter.userId = query.userId;
     if (query.paymentMethod) filter.paymentMethod = query.paymentMethod;
     if (query.orderType) filter.orderType = query.orderType;
+    if (query.orderNumber) {
+      const rx = new RegExp(
+        String(query.orderNumber).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+        'i',
+      );
+      filter.$or = [{ orderNumber: rx }, { orderId: rx }];
+    }
+    if (query.paymentStatus) {
+      // pre-stock payments live in the shared `payments` collection keyed by
+      // orderNumber; filter orders that have a payment with this status
+      const paying = await this.paymentModel
+        .find({ paymentStatus: query.paymentStatus })
+        .select('orderId')
+        .lean()
+        .exec();
+      const numbers = paying.map((p: any) => String(p.orderId));
+      filter.orderNumber = { $in: numbers };
+    }
     if (query.startDate || query.endDate) {
       filter.createdAt = {};
       if (query.startDate) filter.createdAt.$gte = new Date(query.startDate);
@@ -446,7 +483,8 @@ export class StorefrontOrdersService {
     const sort: any = { createdAt: -1 };
     if (query.sort) {
       const [field, direction] = String(query.sort).split(':');
-      if (field) sort[field] = (direction || 'DESC').toUpperCase() === 'ASC' ? 1 : -1;
+      if (field)
+        sort[field] = (direction || 'DESC').toUpperCase() === 'ASC' ? 1 : -1;
     }
 
     const [docs, total] = await Promise.all([
@@ -465,14 +503,17 @@ export class StorefrontOrdersService {
   async findOne(id: string) {
     const doc = await this.orderModel.findById(id).exec();
     if (!doc) throw new NotFoundException('Order not found');
-    const docs = await this.orderModel.find({ orderNumber: doc.orderNumber || doc.orderId }).exec();
+    const docs = await this.orderModel
+      .find({ orderNumber: doc.orderNumber || doc.orderId })
+      .exec();
     const grouped = await this.groupDocs(docs);
     return grouped[0] || { ...doc.toObject(), items: [] };
   }
 
   async findByOrderNumber(orderNumber: string) {
     const docs = await this.orderModel.find({ orderNumber }).exec();
-    if (!docs.length) throw new NotFoundException(`Order with number ${orderNumber} not found`);
+    if (!docs.length)
+      throw new NotFoundException(`Order with number ${orderNumber} not found`);
     const grouped = await this.groupDocs(docs);
     return grouped[0];
   }
@@ -481,7 +522,9 @@ export class StorefrontOrdersService {
   // Mutations (status/update/cancel) - shared with admin parity
   // -------------------------------------------------------------------------
   async update(id: string, data: any) {
-    const doc = await this.orderModel.findByIdAndUpdate(id, { $set: data }, { new: true }).exec();
+    const doc = await this.orderModel
+      .findByIdAndUpdate(id, { $set: data }, { new: true })
+      .exec();
     if (!doc) throw new NotFoundException('Order not found');
     return doc.toObject();
   }
@@ -491,35 +534,116 @@ export class StorefrontOrdersService {
     const doc = await this.orderModel
       .findByIdAndUpdate(
         id,
-        { $set: { status, isPurchased: status === 'Purchased' || status === 'PURCHASED' } },
+        {
+          $set: {
+            status,
+            isPurchased: status === 'Purchased' || status === 'PURCHASED',
+          },
+        },
         { new: true },
       )
       .exec();
     if (!doc) throw new NotFoundException('Order not found');
-    const docs = await this.orderModel.find({ orderNumber: doc.orderNumber || doc.orderId }).exec();
+    const docs = await this.orderModel
+      .find({ orderNumber: doc.orderNumber || doc.orderId })
+      .exec();
     const grouped = await this.groupDocs(docs);
     return grouped[0] || { ...doc.toObject(), items: [] };
   }
 
-  async updateLineItemStatus(id: string, body: { productId?: string; status?: string; type?: string }) {
+  /**
+   * Resolve the target line docs of a grouped order for admin per-item ops.
+   * `id` is the grouped order id (orderNumber). Candidates are filtered by
+   * `type` ('product' → prestock lines, 'outside_order' → import lines) and
+   * matched on productId or the line's own _id.
+   */
+  private async resolveLineDocs(
+    id: string,
+    body: { productId?: string; type?: string },
+  ) {
     const doc = await this.orderModel.findById(id).exec();
-    if (!doc) throw new NotFoundException('Order not found');
-    const set: any = { status: body.status || doc.status };
-    if (body.status === 'Purchased' || body.status === 'PURCHASED') set.isPurchased = true;
-    const updated = await this.orderModel
-      .findByIdAndUpdate(id, { $set: set }, { new: true })
+    let groupNumber = doc?.orderNumber || doc?.orderId || id;
+    if (!doc) {
+      const byNumber = await this.orderModel
+        .findOne({ orderNumber: id })
+        .exec();
+      if (!byNumber) throw new NotFoundException('Order not found');
+      groupNumber = byNumber.orderNumber;
+    }
+    const all = await this.orderModel.find({ orderNumber: groupNumber }).exec();
+    const wantType = body.type === 'outside_order' ? 'import' : 'prestock';
+    let candidates = all.filter((d) => (d.orderType || 'import') === wantType);
+    if (body.productId) {
+      const matched = candidates.filter(
+        (d) =>
+          String(d._id) === String(body.productId) ||
+          (d.productId && String(d.productId) === String(body.productId)),
+      );
+      if (matched.length > 0) candidates = matched;
+    }
+    if (candidates.length === 0) {
+      throw new NotFoundException('Product not found in order');
+    }
+    return { groupNumber, candidates };
+  }
+
+  async updateLineItemStatus(
+    id: string,
+    body: { productId?: string; status?: string; type?: string },
+  ) {
+    if (!body.status) throw new BadRequestException('status is required');
+    const { candidates } = await this.resolveLineDocs(id, body);
+    const isPurchased =
+      String(body.status).toLowerCase() === 'purchased' ? true : undefined;
+    const ids = candidates.map((d) => d._id);
+    await this.orderModel
+      .updateMany(
+        { _id: { $in: ids } },
+        {
+          $set: {
+            status: body.status,
+            ...(isPurchased !== undefined && { isPurchased }),
+          },
+        },
+      )
       .exec();
-    return updated.toObject();
+    const docs = await this.orderModel
+      .find({ orderNumber: candidates[0].orderNumber })
+      .exec();
+    const grouped = await this.groupDocs(docs);
+    return grouped[0] || null;
+  }
+
+  async uploadProductImage(
+    id: string,
+    body: { productId?: string; type?: string },
+    productImageUrl?: string,
+  ) {
+    if (!productImageUrl) throw new BadRequestException('No image uploaded');
+    const { candidates } = await this.resolveLineDocs(id, body);
+    await this.orderModel
+      .updateMany(
+        { _id: { $in: candidates.map((d) => d._id) } },
+        { $set: { productImageUrl } },
+      )
+      .exec();
+    const docs = await this.orderModel
+      .find({ orderNumber: candidates[0].orderNumber })
+      .exec();
+    const grouped = await this.groupDocs(docs);
+    return grouped[0] || null;
   }
 
   async cancelOrder(id: string) {
     const doc = await this.orderModel.findById(id).exec();
     if (!doc) throw new NotFoundException('Order not found');
     const orderNumber = doc.orderNumber || doc.orderId;
-    await this.orderModel.updateMany(
-      { orderNumber },
-      { $set: { status: 'Cancelled', isPurchased: false } },
-    ).exec();
+    await this.orderModel
+      .updateMany(
+        { orderNumber },
+        { $set: { status: 'Cancelled', isPurchased: false } },
+      )
+      .exec();
     const docs = await this.orderModel.find({ orderNumber }).exec();
     const grouped = await this.groupDocs(docs);
     return grouped[0];

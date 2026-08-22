@@ -36,6 +36,7 @@ export const OrderSchema = new mongoose.Schema(
     weightCharge: { type: Number },
     totalEstimatedPrice: { type: Number },
     ssImageUrl: { type: String },
+    productImageUrl: { type: String },
     // Pre-stock fields (pfu2 legacy cart-based order)
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'Pfu2User' },
     isGuest: { type: Boolean, default: false },
@@ -68,6 +69,11 @@ export const OrderSchema = new mongoose.Schema(
         'PARTIAL_DELIVERED',
         'FULL_DELIVERED',
         'CANCELLED',
+        // legacy pfu2 per-item statuses (lowercase) sent by the admin UI
+        'pending',
+        'purchased',
+        'stockout',
+        'cancelled',
       ],
       default: 'Pending',
     },

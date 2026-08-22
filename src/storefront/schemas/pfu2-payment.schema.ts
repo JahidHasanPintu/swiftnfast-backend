@@ -3,7 +3,11 @@ import * as mongoose from 'mongoose';
 export const Pfu2PaymentSchema = new mongoose.Schema(
   {
     orderId: { type: mongoose.Schema.Types.Mixed, default: null },
-    method: { type: String, enum: ['bkash', 'rocket', 'nagad', 'card'], required: true },
+    method: {
+      type: String,
+      enum: ['bkash', 'rocket', 'nagad', 'card'],
+      required: true,
+    },
     phoneNumber: { type: String, required: true },
     paymentId: { type: String },
     transactionId: { type: String },
@@ -13,7 +17,11 @@ export const Pfu2PaymentSchema = new mongoose.Schema(
     amount: { type: String },
     rawResponse: { type: mongoose.Schema.Types.Mixed },
     screenshotUrl: { type: String },
-    paymentStatus: { type: String, enum: ['paid', 'pending', 'failed'], default: 'pending' },
+    paymentStatus: {
+      type: String,
+      enum: ['paid', 'pending', 'failed'],
+      default: 'pending',
+    },
     paymentSource: { type: String },
   },
   { timestamps: true, collection: 'payments' },

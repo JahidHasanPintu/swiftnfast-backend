@@ -1,12 +1,18 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 
 @Injectable()
 export class AddressService {
   constructor(
-    @InjectModel('Pfu2ShippingAddress') private readonly shippingModel: Model<any>,
-    @InjectModel('Pfu2BillingAddress') private readonly billingModel: Model<any>,
+    @InjectModel('Pfu2ShippingAddress')
+    private readonly shippingModel: Model<any>,
+    @InjectModel('Pfu2BillingAddress')
+    private readonly billingModel: Model<any>,
   ) {}
 
   private requireId(userId?: string) {
@@ -14,7 +20,15 @@ export class AddressService {
     return userId;
   }
 
-  async createShipping(userId: string | undefined, body: { name: string; email: string; phone: string; shippingAddress: string }) {
+  async createShipping(
+    userId: string | undefined,
+    body: {
+      name: string;
+      email: string;
+      phone: string;
+      shippingAddress: string;
+    },
+  ) {
     const uid = this.requireId(userId);
     const address = await this.shippingModel.create({ ...body, userId: uid });
     return { id: address._id, ...body, userId: uid };
@@ -22,28 +36,42 @@ export class AddressService {
 
   async getAllShipping(userId: string | undefined) {
     const uid = this.requireId(userId);
-    const rows = await this.shippingModel.find({ userId: uid }).sort({ createdAt: -1 }).exec();
-    return rows.map((r: any) => ({ id: r._id, name: r.name, email: r.email, phone: r.phone, shippingAddress: r.shippingAddress, userId: r.userId }));
+    const rows = await this.shippingModel
+      .find({ userId: uid })
+      .sort({ createdAt: -1 })
+      .exec();
+    return rows.map((r: any) => ({
+      id: r._id,
+      name: r.name,
+      email: r.email,
+      phone: r.phone,
+      shippingAddress: r.shippingAddress,
+      userId: r.userId,
+    }));
   }
 
   async updateShipping(userId: string | undefined, id: string, body: any) {
     const uid = this.requireId(userId);
-    const address = await this.shippingModel.findOneAndUpdate(
-      { _id: id, userId: uid },
-      { $set: body },
-      { new: true },
-    ).exec();
+    const address = await this.shippingModel
+      .findOneAndUpdate({ _id: id, userId: uid }, { $set: body }, { new: true })
+      .exec();
     if (!address) throw new NotFoundException('Address not found');
     return address;
   }
 
   async deleteShipping(userId: string | undefined, id: string) {
     const uid = this.requireId(userId);
-    const result = await this.shippingModel.deleteOne({ _id: id, userId: uid }).exec();
-    if (result.deletedCount === 0) throw new NotFoundException('Address not found');
+    const result = await this.shippingModel
+      .deleteOne({ _id: id, userId: uid })
+      .exec();
+    if (result.deletedCount === 0)
+      throw new NotFoundException('Address not found');
   }
 
-  async createBilling(userId: string | undefined, body: { name: string; email: string; phone: string }) {
+  async createBilling(
+    userId: string | undefined,
+    body: { name: string; email: string; phone: string },
+  ) {
     const uid = this.requireId(userId);
     const address = await this.billingModel.create({ ...body, userId: uid });
     return { id: address._id, ...body, userId: uid };
@@ -51,24 +79,34 @@ export class AddressService {
 
   async getAllBilling(userId: string | undefined) {
     const uid = this.requireId(userId);
-    const rows = await this.billingModel.find({ userId: uid }).sort({ createdAt: -1 }).exec();
-    return rows.map((r: any) => ({ id: r._id, name: r.name, email: r.email, phone: r.phone, userId: r.userId }));
+    const rows = await this.billingModel
+      .find({ userId: uid })
+      .sort({ createdAt: -1 })
+      .exec();
+    return rows.map((r: any) => ({
+      id: r._id,
+      name: r.name,
+      email: r.email,
+      phone: r.phone,
+      userId: r.userId,
+    }));
   }
 
   async updateBilling(userId: string | undefined, id: string, body: any) {
     const uid = this.requireId(userId);
-    const address = await this.billingModel.findOneAndUpdate(
-      { _id: id, userId: uid },
-      { $set: body },
-      { new: true },
-    ).exec();
+    const address = await this.billingModel
+      .findOneAndUpdate({ _id: id, userId: uid }, { $set: body }, { new: true })
+      .exec();
     if (!address) throw new NotFoundException('Address not found');
     return address;
   }
 
   async deleteBilling(userId: string | undefined, id: string) {
     const uid = this.requireId(userId);
-    const result = await this.billingModel.deleteOne({ _id: id, userId: uid }).exec();
-    if (result.deletedCount === 0) throw new NotFoundException('Address not found');
+    const result = await this.billingModel
+      .deleteOne({ _id: id, userId: uid })
+      .exec();
+    if (result.deletedCount === 0)
+      throw new NotFoundException('Address not found');
   }
 }

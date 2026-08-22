@@ -16,8 +16,14 @@ describe('buildOrderGroupingStages', () => {
     expect(stages[0].$sort.createdAt).toBe(-1);
 
     // computed status prefers Pending, then Cancelled, else Purchased.
-    const addFields = stages.find((s) => s.$addFields);
+    const addFields = stages.find(
+      (s) => s.$addFields && s.$addFields.calculatedStatus,
+    );
     expect(addFields.$addFields.calculatedStatus).toBeDefined();
+
+    // statuses are lowercased before matching so mixed-case enums group right.
+    const normalize = stages.find((s) => s.$addFields?.statuses);
+    expect(normalize).toBeDefined();
 
     // replaceRoot flattens the group into a single order-shaped document.
     const replaceRoot = stages.find((s) => s.$replaceRoot);

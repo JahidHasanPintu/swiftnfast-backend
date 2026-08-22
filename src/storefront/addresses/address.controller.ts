@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { Public } from 'src/common/decorators/public.decorator';
 import { StorefrontAuthGuard } from '../auth/storefront-auth.guards';
 import { StorefrontRequest } from '../auth/storefront-request.interface';
@@ -12,7 +22,10 @@ export class AddressController {
 
   @Post('shipping')
   async createShipping(@Req() req: StorefrontRequest, @Body() body: any) {
-    const data = await this.addressService.createShipping(req.user?.userId, body);
+    const data = await this.addressService.createShipping(
+      req.user?.userId,
+      body,
+    );
     return { success: true, data };
   }
 
@@ -23,8 +36,16 @@ export class AddressController {
   }
 
   @Put('shipping/:id')
-  async updateShipping(@Req() req: StorefrontRequest, @Param('id') id: string, @Body() body: any) {
-    const data = await this.addressService.updateShipping(req.user?.userId, id, body);
+  async updateShipping(
+    @Req() req: StorefrontRequest,
+    @Param('id') id: string,
+    @Body() body: any,
+  ) {
+    const data = await this.addressService.updateShipping(
+      req.user?.userId,
+      id,
+      body,
+    );
     return { success: true, data };
   }
 
@@ -36,7 +57,10 @@ export class AddressController {
 
   @Post('billing')
   async createBilling(@Req() req: StorefrontRequest, @Body() body: any) {
-    const data = await this.addressService.createBilling(req.user?.userId, body);
+    const data = await this.addressService.createBilling(
+      req.user?.userId,
+      body,
+    );
     return { success: true, data };
   }
 
@@ -47,8 +71,16 @@ export class AddressController {
   }
 
   @Put('billing/:id')
-  async updateBilling(@Req() req: StorefrontRequest, @Param('id') id: string, @Body() body: any) {
-    const data = await this.addressService.updateBilling(req.user?.userId, id, body);
+  async updateBilling(
+    @Req() req: StorefrontRequest,
+    @Param('id') id: string,
+    @Body() body: any,
+  ) {
+    const data = await this.addressService.updateBilling(
+      req.user?.userId,
+      id,
+      body,
+    );
     return { success: true, data };
   }
 

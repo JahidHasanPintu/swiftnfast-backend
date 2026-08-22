@@ -5,7 +5,9 @@ import { generateImageUrl } from '../utils/image-url.util';
 
 @Injectable()
 export class BannerService {
-  constructor(@InjectModel('Banner') private readonly bannerModel: Model<any>) {}
+  constructor(
+    @InjectModel('Banner') private readonly bannerModel: Model<any>,
+  ) {}
 
   private serialize(doc: any) {
     const obj = doc.toObject ? doc.toObject() : doc;
@@ -21,7 +23,12 @@ export class BannerService {
     const skip = (page - 1) * limit;
 
     const [rows, total] = await Promise.all([
-      this.bannerModel.find({}).sort({ order: 1 }).skip(skip).limit(limit).exec(),
+      this.bannerModel
+        .find({})
+        .sort({ order: 1 })
+        .skip(skip)
+        .limit(limit)
+        .exec(),
       this.bannerModel.countDocuments({}).exec(),
     ]);
     return {

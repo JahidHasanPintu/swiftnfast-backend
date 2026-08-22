@@ -19,6 +19,10 @@ import { DatabaseSchemasModule } from 'src/database/schemas.module';
     StorefrontCategoryService,
     StorefrontBrandService,
   ],
-  exports: [StorefrontProductService, StorefrontCategoryService, StorefrontBrandService],
+  exports: [
+    StorefrontProductService,
+    StorefrontCategoryService,
+    StorefrontBrandService,
+  ],
 })
 export class StorefrontCatalogModule {}

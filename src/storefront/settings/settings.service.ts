@@ -4,7 +4,9 @@ import { Model } from 'mongoose';
 
 @Injectable()
 export class SettingsService {
-  constructor(@InjectModel('Setting') private readonly settingModel: Model<any>) {}
+  constructor(
+    @InjectModel('Setting') private readonly settingModel: Model<any>,
+  ) {}
 
   async findAll() {
     return this.settingModel
@@ -39,6 +41,11 @@ export class SettingsService {
       await existing.save();
       return existing;
     }
-    return this.settingModel.create({ key, value, label: label ?? key, updated_at: now });
+    return this.settingModel.create({
+      key,
+      value,
+      label: label ?? key,
+      updated_at: now,
+    });
   }
 }

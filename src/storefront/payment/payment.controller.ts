@@ -23,7 +23,11 @@ export class PaymentController {
   @UseInterceptors(FileInterceptor('screenshot'))
   async createPayment(@Body() body: any, @UploadedFile() file: any) {
     const payment = await this.paymentService.createPayment(body, file);
-    return { success: true, message: 'Payment created successfully', data: payment };
+    return {
+      success: true,
+      message: 'Payment created successfully',
+      data: payment,
+    };
   }
 
   @Get(':id')

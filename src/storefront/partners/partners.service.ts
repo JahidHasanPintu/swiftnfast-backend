@@ -5,7 +5,9 @@ import { generateImageUrl } from '../utils/image-url.util';
 
 @Injectable()
 export class PartnersService {
-  constructor(@InjectModel('Partner') private readonly partnerModel: Model<any>) {}
+  constructor(
+    @InjectModel('Partner') private readonly partnerModel: Model<any>,
+  ) {}
 
   private serialize(doc: any) {
     const obj = doc.toObject ? doc.toObject() : doc;
@@ -22,7 +24,12 @@ export class PartnersService {
     const filter: Record<string, any> = { isActive: true };
 
     const [rows, totalItems] = await Promise.all([
-      this.partnerModel.find(filter).sort({ name: 1 }).skip(skip).limit(limit).exec(),
+      this.partnerModel
+        .find(filter)
+        .sort({ name: 1 })
+        .skip(skip)
+        .limit(limit)
+        .exec(),
       this.partnerModel.countDocuments(filter).exec(),
     ]);
     return {

@@ -27,7 +27,8 @@ function parseImages(images: any): string[] {
 @Injectable()
 export class StorefrontProductService {
   constructor(
-    @InjectModel('Product') private readonly productModel: Model<ProductDocument>,
+    @InjectModel('Product')
+    private readonly productModel: Model<ProductDocument>,
     @InjectModel('Category') private readonly categoryModel: Model<any>,
   ) {}
 
@@ -54,7 +55,10 @@ export class StorefrontProductService {
     }
     if (query.brand) filter.brand = { $regex: query.brand, $options: 'i' };
     if (query.brands) {
-      const brands = String(query.brands).split(',').map((b) => b.trim()).filter(Boolean);
+      const brands = String(query.brands)
+        .split(',')
+        .map((b) => b.trim())
+        .filter(Boolean);
       if (brands.length) {
         filter.brand = { $in: brands.map((b) => new RegExp(b, 'i')) };
       }

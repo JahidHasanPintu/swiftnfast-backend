@@ -12,10 +12,7 @@ export interface Envelope {
   data?: any;
 }
 
-export function sendResponse(
-  payload: Envelope,
-  statusCode = 200,
-): Envelope {
+export function sendResponse(payload: Envelope, statusCode = 200): Envelope {
   if (statusCode >= 400) {
     throw new HttpException(payload, statusCode);
   }
