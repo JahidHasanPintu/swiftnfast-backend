@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import * as mongoose from 'mongoose';
 import { Model } from 'mongoose';
 import { CartDocument } from '../interfaces/cart.interface';
 import { generateImageUrl } from '../utils/image-url.util';
@@ -199,6 +200,9 @@ export class CartService {
   }
 
   async getRawCart(id: string) {
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid cart ID');
+    }
     const cart = await this.cartModel.findById(id).exec();
     if (!cart) {
       throw new NotFoundException('Cart not found');
