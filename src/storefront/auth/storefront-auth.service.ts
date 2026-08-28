@@ -6,17 +6,22 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { StorefrontJwtService } from './storefront-jwt.service';
 import { Pfu2UserDocument } from '../interfaces/pfu2-user.interface';
 import { Logger } from '@nestjs/common';
+import { MailService } from '../mail/mail.service';
 
 const OTP_LIFETIME_MS = 5 * 60 * 1000; // 5 minutes
+const RESET_TOKEN_LIFETIME_MS = 15 * 60 * 1000; // 15 minutes
 
 function sanitizeUser(user: Pfu2UserDocument) {
   const doc = user.toObject();
   delete doc.password;
   delete doc.otp;
   delete doc.otpExpiry;
+  delete doc.resetToken;
+  delete doc.resetTokenExpiry;
   return doc;
 }
 
@@ -27,6 +32,7 @@ export class StorefrontAuthService {
     @InjectModel('Pfu2User')
     private readonly userModel: Model<Pfu2UserDocument>,
     private readonly jwtService: StorefrontJwtService,
+    private readonly mailService: MailService,
   ) {}
 
   private async findVerifiedByEmail(email: string) {
@@ -89,8 +95,10 @@ export class StorefrontAuthService {
     user.otpExpiry = new Date(Date.now() + OTP_LIFETIME_MS);
     user.otpVerified = false;
     await user.save();
-    // pfu2 echoes the OTP back AND emails it; here we log it for dev.
-    this.logger.log(`OTP for ${email}: ${otp}`);
+    // Send OTP via email (non-blocking)
+    this.mailService.sendOtpEmail(email, otp).catch((err) => {
+      this.logger.error(`OTP email failed for ${email}`, err.stack);
+    });
     return { email, otp };
   }
 
@@ -122,5 +130,37 @@ export class StorefrontAuthService {
       role: user.role,
     });
     return { ...sanitizeUser(user), accessToken };
+  }
+
+  async forgotPassword(body: { email: string }) {
+    const email = (body.email || '').toLowerCase();
+    const user = await this.userModel.findOne({ email }).exec();
+    // Always return success to prevent email enumeration
+    if (!user) {
+      return { success: true, message: 'If the email exists, a reset link has been sent' };
+    }
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    user.resetToken = resetToken;
+    user.resetTokenExpiry = new Date(Date.now() + RESET_TOKEN_LIFETIME_MS);
+    await user.save();
+    this.mailService.sendPasswordResetEmail(email, resetToken).catch((err) => {
+      this.logger.error(`Password reset email failed for ${email}`, err.stack);
+    });
+    return { success: true, message: 'If the email exists, a reset link has been sent' };
+  }
+
+  async resetPassword(body: { token: string; newPassword: string }) {
+    const user = await this.userModel.findOne({
+      resetToken: body.token,
+      resetTokenExpiry: { $gt: new Date() },
+    }).exec();
+    if (!user) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+    user.password = await bcrypt.hash(body.newPassword, 10);
+    user.resetToken = undefined;
+    user.resetTokenExpiry = undefined;
+    await user.save();
+    return { success: true, message: 'Password reset successful' };
   }
 }

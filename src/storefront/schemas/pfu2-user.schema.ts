@@ -19,6 +19,8 @@ export const Pfu2UserSchema = new mongoose.Schema(
     otp: { type: String },
     otpExpiry: { type: Date },
     otpVerified: { type: Boolean, default: false },
+    resetToken: { type: String },
+    resetTokenExpiry: { type: Date },
   },
   { timestamps: true, collection: 'pfu2_users' },
 );

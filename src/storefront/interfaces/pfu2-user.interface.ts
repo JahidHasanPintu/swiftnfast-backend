@@ -15,6 +15,8 @@ export interface Pfu2UserDocument extends Document {
   otp?: string;
   otpExpiry?: Date;
   otpVerified: boolean;
+  resetToken?: string;
+  resetTokenExpiry?: Date;
   createdAt?: Date;
   updatedAt?: Date;
 }

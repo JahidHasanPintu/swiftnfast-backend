@@ -45,4 +45,18 @@ export class StorefrontAuthController {
     const data = await this.authService.login(body);
     return { success: true, message: 'Login successful', data };
   }
+
+  @Post('forgot-password')
+  @HttpCode(200)
+  async forgotPassword(@Body() body: { email: string }) {
+    return this.authService.forgotPassword(body);
+  }
+
+  @Post('reset-password')
+  @HttpCode(200)
+  async resetPassword(
+    @Body() body: { token: string; newPassword: string },
+  ) {
+    return this.authService.resetPassword(body);
+  }
 }

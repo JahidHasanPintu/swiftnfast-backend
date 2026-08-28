@@ -12,6 +12,7 @@ import { AddressModule } from './addresses/address.module';
 import { PaymentModule } from './payment/payment.module';
 import { StorefrontOrdersModule } from './orders/storefront-orders.module';
 import { AdminModule } from './admin/admin.module';
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { AdminModule } from './admin/admin.module';
     PaymentModule,
     StorefrontOrdersModule,
     AdminModule,
+    MailModule,
   ],
 })
 export class StorefrontModule {}

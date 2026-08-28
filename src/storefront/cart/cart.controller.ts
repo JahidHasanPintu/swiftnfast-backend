@@ -22,6 +22,7 @@ import {
 } from '../auth/storefront-auth.guards';
 import { StorefrontRequest } from '../auth/storefront-request.interface';
 import { CartService } from './cart.service';
+import { MailService } from '../mail/mail.service';
 
 @Public()
 @Controller('api/v1')
@@ -29,6 +30,7 @@ export class CartController {
   constructor(
     private readonly cartService: CartService,
     private readonly storageService: StorageService,
+    private readonly mailService: MailService,
   ) {}
 
   private identity(req: StorefrontRequest) {
@@ -170,8 +172,15 @@ export class CartController {
 
   @Patch('cart/:id/request-price')
   @UseGuards(StorefrontOptionalAuthGuard)
-  async requestPrice(@Param('id') id: string, @Body() body: any) {
+  async requestPrice(
+    @Param('id') id: string,
+    @Body() body: any,
+    @Req() req: StorefrontRequest,
+  ) {
     const data = await this.cartService.requestPrice(id, body);
+    // Send price request notification to admin (non-blocking)
+    const customerName = req.user?.userId || body.guestContact || 'Guest';
+    this.mailService.sendPriceRequestEmail(customerName, id).catch(() => {});
     return { success: true, message: 'Price Request Submitted', data };
   }
 
