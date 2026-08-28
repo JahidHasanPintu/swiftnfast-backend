@@ -9,7 +9,7 @@ export class StorefrontBrandService {
 
   private serialize(doc: any) {
     const obj = doc.toObject ? doc.toObject() : doc;
-    return { ...obj, logo: generateImageUrl('partners', obj.logo) };
+    return { ...obj, id: obj._id?.toString(), logo: generateImageUrl('partners', obj.logo) };
   }
 
   async findAll() {

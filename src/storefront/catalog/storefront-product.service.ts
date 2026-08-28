@@ -36,6 +36,7 @@ export class StorefrontProductService {
     const obj = doc.toObject ? doc.toObject() : doc;
     return {
       ...obj,
+      id: obj._id?.toString(),
       categoryId: obj.categoryId,
       category: obj.category,
       images: parseImages(obj.images),

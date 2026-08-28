@@ -73,9 +73,10 @@ export class StorefrontOrdersService {
       },
     );
 
-    const userId = body.userId
-      ? new mongoose.Types.ObjectId(body.userId)
-      : undefined;
+    const userId =
+      body.userId && mongoose.Types.ObjectId.isValid(String(body.userId))
+        ? new mongoose.Types.ObjectId(body.userId)
+        : undefined;
 
     const lineItems = [];
     for (let i = 0; i < rawItems.length; i++) {
@@ -107,10 +108,12 @@ export class StorefrontOrdersService {
           `${item.productSourcedFrom || 'Imported'} sourced product`;
       }
 
+      const orderType = type === 'outside_order' ? 'import' : 'prestock';
+
       lineItems.push({
         orderId: orderNumber,
         orderNumber,
-        orderType: 'prestock',
+        orderType,
         customerId: customer._id,
         customerName: customer.customerName || shippingName,
         contactNo: shippingPhone,
@@ -208,7 +211,9 @@ export class StorefrontOrdersService {
     let userId;
     let customer;
     const syntheticContact = `OUT-${Date.now()}`;
-    if (body.userId) {
+    const isValidObjectId =
+      body.userId && mongoose.Types.ObjectId.isValid(String(body.userId));
+    if (isValidObjectId) {
       userId = new mongoose.Types.ObjectId(body.userId);
       const user: any = await this.userModel
         .findById(body.userId)

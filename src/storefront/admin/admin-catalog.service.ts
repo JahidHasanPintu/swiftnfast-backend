@@ -121,6 +121,7 @@ export class AdminCatalogService {
   private serializeCategory(doc: any) {
     return {
       ...doc,
+      id: doc._id?.toString(),
       image: doc.image ? generateImageUrl('categories', doc.image) : null,
       bannerImage: doc.bannerImage
         ? generateImageUrl('categories', doc.bannerImage)
@@ -180,6 +181,7 @@ export class AdminCatalogService {
   private serializeBrand(doc: any) {
     return {
       ...doc,
+      id: doc._id?.toString(),
       logo: doc.logo ? generateImageUrl('partners', doc.logo) : null,
     };
   }
@@ -327,6 +329,7 @@ export class AdminCatalogService {
   private serializeProduct(doc: any) {
     return {
       ...doc,
+      id: doc._id?.toString(),
       images: Array.isArray(doc.images)
         ? doc.images.map((i: string) => generateImageUrl('products', i))
         : [],
@@ -345,7 +348,13 @@ export class AdminCatalogService {
       isWiderImage: toBool(body.isWiderImage) ?? false,
       isActive: toBool(body.isActive) ?? true,
     };
-    if (body.categoryId) data.categoryId = body.categoryId;
+    if (body.categoryId) {
+      try {
+        data.categoryId = new mongoose.Types.ObjectId(String(body.categoryId));
+      } catch {
+        throw new BadRequestException('Invalid categoryId');
+      }
+    }
     const image = await this.storeImage(imageFile, 'offers');
     if (image) data.image = image;
     const created = await this.offerModel.create(data);
@@ -362,7 +371,19 @@ export class AdminCatalogService {
     for (const key of ['isActive', 'isWiderImage'] as const) {
       if (body[key] !== undefined) data[key] = toBool(body[key]);
     }
-    if (body.categoryId !== undefined) data.categoryId = body.categoryId;
+    if (body.categoryId !== undefined) {
+      if (body.categoryId === '' || body.categoryId === null) {
+        data.categoryId = undefined;
+      } else {
+        try {
+          data.categoryId = new mongoose.Types.ObjectId(
+            String(body.categoryId),
+          );
+        } catch {
+          throw new BadRequestException('Invalid categoryId');
+        }
+      }
+    }
     const image = await this.storeImage(imageFile, 'offers');
     if (image) data.image = image;
     Object.assign(offer, data);
@@ -390,9 +411,10 @@ export class AdminCatalogService {
     }
     return {
       ...doc,
+      id: doc._id?.toString(),
       categoryId: doc.categoryId,
       category: category
-        ? { _id: category._id, id: category._id, name: category.name }
+        ? { _id: category._id, id: category._id.toString(), name: category.name }
         : null,
       image: doc.image ? generateImageUrl('offers', doc.image) : null,
     };
@@ -452,6 +474,7 @@ export class AdminCatalogService {
   private serializePartner(doc: any) {
     return {
       ...doc,
+      id: doc._id?.toString(),
       logo: doc.logo ? generateImageUrl('partners', doc.logo) : null,
     };
   }
@@ -522,6 +545,7 @@ export class AdminCatalogService {
   private serializeBanner(doc: any) {
     return {
       ...doc,
+      id: doc._id?.toString(),
       bannerImage: doc.bannerImage
         ? generateImageUrl('banners', doc.bannerImage)
         : null,
@@ -544,7 +568,8 @@ export class AdminCatalogService {
       answer: body.answer,
       order,
     });
-    return created.toObject();
+    const obj = created.toObject();
+    return { ...obj, id: obj._id?.toString() };
   }
 
   async updateFaq(id: string, body: any) {
@@ -554,7 +579,8 @@ export class AdminCatalogService {
     if (body.answer !== undefined) faq.answer = body.answer;
     if (body.order !== undefined) faq.order = toNum(body.order);
     await faq.save();
-    return faq.toObject();
+    const obj = faq.toObject();
+    return { ...obj, id: obj._id?.toString() };
   }
 
   async removeFaq(id: string) {

@@ -13,6 +13,7 @@ export class StorefrontCategoryService {
     const obj = doc.toObject ? doc.toObject() : doc;
     return {
       ...obj,
+      id: obj._id?.toString(),
       image: generateImageUrl('categories', obj.image),
       bannerImage: generateImageUrl('categories', obj.bannerImage),
     };

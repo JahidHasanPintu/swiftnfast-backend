@@ -212,7 +212,20 @@ export class CartService {
 
   async addItem(
     identity: { userId?: string; guestToken?: string },
-    body: { productId: string; quantity: number; price: number; type?: string },
+    body: {
+      productId: string;
+      quantity: number;
+      price: number;
+      type?: string;
+      name?: string;
+      productUrl?: string;
+      productSourcedFrom?: string;
+      color?: string;
+      size?: string;
+      notes?: string;
+      approximatePrice?: number;
+      totalEstimatedPrice?: number;
+    },
   ) {
     const cart = await this.findOrCreate(identity);
     const type = body.type || 'product';
@@ -239,12 +252,23 @@ export class CartService {
       items[idx].quantity = Number(items[idx].quantity) + qty;
       items[idx].price = price;
     } else {
-      items.push({
+      const item: any = {
         productId: body.productId,
         quantity: qty,
         price,
         type,
-      });
+      };
+      if (type === 'outside_order') {
+        item.name = body.name;
+        item.productUrl = body.productUrl;
+        item.productSourcedFrom = body.productSourcedFrom;
+        item.color = body.color;
+        item.size = body.size;
+        item.notes = body.notes;
+        item.approximatePrice = body.approximatePrice;
+        item.totalEstimatedPrice = body.totalEstimatedPrice;
+      }
+      items.push(item);
     }
 
     const totals = calculateCartTotals(
