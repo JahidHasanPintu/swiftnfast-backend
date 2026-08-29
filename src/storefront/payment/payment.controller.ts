@@ -44,7 +44,17 @@ export class PaymentController {
 
   @Post('bkash/create-payment')
   async createBkashPayment(@Body() body: any) {
-    return this.paymentService.createBkashPayment(body);
+    console.log('[Payment Controller] POST /bkash/create-payment');
+    console.log('[Payment Controller] Body:', JSON.stringify(body, null, 2));
+    try {
+      const result = await this.paymentService.createBkashPayment(body);
+      console.log('[Payment Controller] createBkashPayment success:', JSON.stringify(result, null, 2));
+      return result;
+    } catch (error: any) {
+      console.error('[Payment Controller] createBkashPayment error:', error.message);
+      console.error('[Payment Controller] Error response:', error.response?.data);
+      throw error;
+    }
   }
 
   @Post('bkash/refund-payment')
@@ -54,19 +64,42 @@ export class PaymentController {
 
   @Get('bkash/callback')
   async bkashCallback(@Query() query: any, @Res() res: Response) {
+    console.log('[Payment Controller] GET /bkash/callback');
+    console.log('[Payment Controller] Query params:', JSON.stringify(query, null, 2));
     const url = await this.paymentService.bkashCallback(query);
+    console.log('[Payment Controller] Redirecting to:', url);
     return res.redirect(url);
   }
 
   @Get('bkash/execute')
   async executePayment(@Query() query: any, @Res() res: Response) {
+    console.log('[Payment Controller] GET /bkash/execute');
+    console.log('[Payment Controller] Query params:', JSON.stringify(query, null, 2));
     const url = await this.paymentService.executePayment(query);
+    console.log('[Payment Controller] Redirecting to:', url);
     return res.redirect(url);
   }
 
   @Get('bkash/query')
   async queryPayment(@Query() query: any, @Res() res: Response) {
+    console.log('[Payment Controller] GET /bkash/query');
+    console.log('[Payment Controller] Query params:', JSON.stringify(query, null, 2));
     const url = await this.paymentService.queryPayment(query);
+    console.log('[Payment Controller] Redirecting to:', url);
     return res.redirect(url);
+  }
+
+  @Post('bkash/repay')
+  async repayBkashPayment(@Body() body: { orderId: string }) {
+    console.log('[Payment Controller] POST /bkash/repay');
+    console.log('[Payment Controller] Body:', JSON.stringify(body, null, 2));
+    try {
+      const result = await this.paymentService.repayBkashPayment(body.orderId);
+      console.log('[Payment Controller] repayBkashPayment success:', JSON.stringify(result, null, 2));
+      return result;
+    } catch (error: any) {
+      console.error('[Payment Controller] repayBkashPayment error:', error.message);
+      throw error;
+    }
   }
 }
