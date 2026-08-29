@@ -7,6 +7,7 @@ export const Pfu2PaymentSchema = new mongoose.Schema(
       type: String,
       enum: ['bkash', 'rocket', 'nagad', 'card', 'visa', 'bank-transfer'],
       required: true,
+      set: (v: string) => v?.toLowerCase(),
     },
     phoneNumber: { type: String, required: true },
     paymentId: { type: String },
