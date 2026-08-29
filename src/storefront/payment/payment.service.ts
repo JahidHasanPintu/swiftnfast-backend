@@ -53,17 +53,21 @@ export class PaymentService {
 
   async getAccessToken() {
     console.log('[bKash] Getting access token...');
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    // bKash tokens are valid for a long time (months). Cache until invalidated.
     const cached = await this.settingsService.getByKey('bkash_token');
-    if (
-      cached?.value &&
-      new Date(cached.updatedAt ?? cached.updated_at) > oneHourAgo
-    ) {
-      console.log('[bKash] Using cached token');
+    if (cached?.value) {
+      console.log('[bKash] Using cached token (stored at:', cached.updatedAt || cached.updated_at, ')');
       return cached.value;
     }
 
     console.log('[bKash] No cached token, requesting new one...');
+    return this.generateNewToken();
+  }
+
+  /**
+   * Generate a new bKash access token and cache it.
+   */
+  private async generateNewToken(): Promise<string> {
     const baseUrl = process.env.BKASH_BASE_URL;
     if (!baseUrl || !process.env.BKASH_APP_KEY) {
       console.error('[bKash] ERROR: BKASH_BASE_URL or BKASH_APP_KEY not configured');
@@ -105,11 +109,23 @@ export class PaymentService {
     return token;
   }
 
+  /**
+   * Clear cached token (call when token is rejected by bKash).
+   */
+  private async clearCachedToken() {
+    try {
+      const cached = await this.settingsService.getByKey('bkash_token');
+      if (cached) {
+        await this.settingsService.upsert('bkash_token', '', 'Expired bKash token');
+        console.log('[bKash] Cached token cleared');
+      }
+    } catch (e) {
+      console.error('[bKash] Error clearing cached token:', e);
+    }
+  }
+
   async createBkashPayment(body: any) {
     console.log('[bKash] createBkashPayment called with body:', JSON.stringify(body, null, 2));
-
-    const token = await this.getAccessToken();
-    console.log('[bKash] Token obtained');
 
     const baseUrl = process.env.BKASH_BASE_URL;
     if (!baseUrl) {
@@ -133,50 +149,80 @@ export class PaymentService {
     console.log('[bKash] Payment data:', JSON.stringify(paymentData, null, 2));
     console.log('[bKash] Request URL:', `${baseUrl}/checkout/create`);
 
-    try {
-      const response = await axios.post(
-        `${baseUrl}/checkout/create`,
-        paymentData,
-        {
-          headers: {
-            authorization: token,
-            'x-app-key': process.env.BKASH_APP_KEY,
-            'Content-Type': 'application/json',
+    // Try with cached token first, retry with fresh token if auth fails
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const token = await (attempt === 1 ? this.getAccessToken() : this.generateNewToken());
+      console.log(`[bKash] Attempt ${attempt}: Token obtained`);
+
+      try {
+        const response = await axios.post(
+          `${baseUrl}/checkout/create`,
+          paymentData,
+          {
+            headers: {
+              authorization: token,
+              'x-app-key': process.env.BKASH_APP_KEY,
+              'Content-Type': 'application/json',
+            },
           },
-        },
-      );
+        );
 
-      console.log('[bKash] bKash API response status:', response.status);
-      console.log('[bKash] bKash API response data:', JSON.stringify(response.data, null, 2));
+        console.log('[bKash] bKash API response status:', response.status);
+        console.log('[bKash] bKash API response data:', JSON.stringify(response.data, null, 2));
 
-      const { paymentID, bkashURL } = response.data;
+        const { paymentID, bkashURL } = response.data;
 
-      if (!paymentID || !bkashURL) {
-        console.error('[bKash] ERROR: Missing paymentID or bkashURL in response');
-        console.error('[bKash] Response data:', response.data);
-        throw new BadRequestException('Failed to create bKash payment - invalid response from bKash API');
+        if (!paymentID || !bkashURL) {
+          console.error('[bKash] ERROR: Missing paymentID or bkashURL in response');
+          console.error('[bKash] Response data:', response.data);
+          throw new BadRequestException('Failed to create bKash payment - invalid response from bKash API');
+        }
+
+        console.log('[bKash] Payment created successfully. paymentID:', paymentID);
+        console.log('[bKash] bkashURL:', bkashURL);
+
+        await this.paymentModel.create({
+          method: 'bkash',
+          phoneNumber: body.phone || DEFAULT_PHONE,
+          paymentId: paymentID,
+          orderId: body.orderId ?? null,
+          transactionStatus: 'initiated',
+          statusMessage: 'Awaiting bKash execution',
+          amount: body.amount,
+        });
+        console.log('[bKash] Payment record saved to Pfu2Payment collection');
+
+        return { paymentID, bkashURL };
+      } catch (error: any) {
+        const status = error.response?.status;
+        const errData = error.response?.data;
+        const errCode = errData?.statusCode;
+        const errMsg = errData?.statusMessage || error.message;
+
+        console.error(`[bKash] Attempt ${attempt} failed:`, errMsg);
+        console.error('[bKash] Status:', status, 'Code:', errCode);
+
+        // Check if this is an auth/token error - retry with fresh token
+        const isAuthError =
+          status === 401 ||
+          status === 403 ||
+          errCode === '2003' ||  // Invalid token
+          errCode === '2004' ||  // Token expired
+          errCode === '1016' ||  // Unauthorized
+          errMsg?.toLowerCase().includes('invalid') && errMsg?.toLowerCase().includes('token') ||
+          errMsg?.toLowerCase().includes('unauthorized');
+
+        if (isAuthError && attempt === 1) {
+          console.log('[bKash] Auth error detected, clearing token and retrying...');
+          await this.clearCachedToken();
+          continue; // retry with fresh token
+        }
+
+        // Non-auth error or second attempt failed
+        console.error('[bKash] ERROR creating payment:', error.message);
+        console.error('[bKash] Error response data:', errData);
+        throw error;
       }
-
-      console.log('[bKash] Payment created successfully. paymentID:', paymentID);
-      console.log('[bKash] bkashURL:', bkashURL);
-
-      await this.paymentModel.create({
-        method: 'bkash',
-        phoneNumber: body.phone || DEFAULT_PHONE,
-        paymentId: paymentID,
-        orderId: body.orderId ?? null,
-        transactionStatus: 'initiated',
-        statusMessage: 'Awaiting bKash execution',
-        amount: body.amount,
-      });
-      console.log('[bKash] Payment record saved to Pfu2Payment collection');
-
-      return { paymentID, bkashURL };
-    } catch (error: any) {
-      console.error('[bKash] ERROR creating payment:', error.message);
-      console.error('[bKash] Error response data:', error.response?.data);
-      console.error('[bKash] Error response status:', error.response?.status);
-      throw error;
     }
   }
 
