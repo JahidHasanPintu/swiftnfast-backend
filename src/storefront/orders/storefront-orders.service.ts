@@ -71,6 +71,7 @@ export class StorefrontOrdersService {
         name: shippingName,
         email: shippingEmail,
         shippingAddress: shippingAddressText,
+        districtName: shipping.district || shipping.districtName,
         sourceOfOrder: 'prestock-storefront',
       },
     );

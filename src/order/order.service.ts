@@ -169,6 +169,12 @@ export class OrderService {
       ) {
         changed.districtName = customerInfo.districtName;
       }
+      if (
+        customerInfo.sourceOfOrder &&
+        customerInfo.sourceOfOrder !== existing.sourceOfOrder
+      ) {
+        changed.sourceOfOrder = customerInfo.sourceOfOrder;
+      }
       if (Object.keys(changed).length > 0) {
         Object.assign(existing, changed);
         await existing.save({ session });
