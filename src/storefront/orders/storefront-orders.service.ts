@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
@@ -8,6 +9,7 @@ import * as mongoose from 'mongoose';
 import { Model } from 'mongoose';
 import { OrderService } from 'src/order/order.service';
 import { CartService } from '../cart/cart.service';
+import { MailService } from '../mail/mail.service';
 import { generateImageUrl } from '../utils/image-url.util';
 import { EventsGateway } from '../../common/gateways/events.gateway';
 
@@ -30,13 +32,16 @@ function toNumber(v: any): number {
 
 @Injectable()
 export class StorefrontOrdersService {
+  private readonly logger = new Logger(StorefrontOrdersService.name);
+
   constructor(
     @InjectModel('Orders') private readonly orderModel: Model<any>,
+    @InjectModel('Login') private readonly usersModel: Model<any>,
     @InjectModel('Product') private readonly productModel: Model<any>,
-    @InjectModel('Pfu2User') private readonly userModel: Model<any>,
-    @InjectModel('Pfu2Payment') private readonly paymentModel: Model<any>,
-    private readonly orderService: OrderService,
+    @InjectModel('Payments') private readonly paymentModel: Model<any>,
+    private readonly ordersService: OrderService,
     private readonly cartService: CartService,
+    private readonly mailService: MailService,
     private readonly eventsGateway: EventsGateway,
   ) {}
 
@@ -56,7 +61,7 @@ export class StorefrontOrdersService {
     const cart = await this.cartService.getRawCart(body.cartId);
     const rawItems = (cart.items as any[]) || [];
 
-    const orderNumber = this.orderService.generateStorefrontOrderNumber();
+    const orderNumber = this.ordersService.generateStorefrontOrderNumber();
 
     const shipping = body.shipping || cart.shippingAddress || {};
     const shippingName = shipping.name;
@@ -65,7 +70,7 @@ export class StorefrontOrdersService {
     const shippingEmail = shipping.email || body.guestEmail;
     const shippingAddressText = shipping.shippingAddress || shipping.address;
 
-    const customer = await this.orderService.findOrCreateCustomerByContact(
+    const customer = await this.ordersService.findOrCreateCustomerByContact(
       shippingPhone || `GUEST-${Date.now()}`,
       {
         name: shippingName,
@@ -217,7 +222,7 @@ export class StorefrontOrdersService {
 
     const qty = toNumber(body.quantity) || 1;
     const uni = toNumber(body.price);
-    const orderNumber = this.orderService.generateStorefrontOrderNumber();
+    const orderNumber = this.ordersService.generateStorefrontOrderNumber();
 
     let userId;
     let customer;
@@ -226,12 +231,12 @@ export class StorefrontOrdersService {
       body.userId && mongoose.Types.ObjectId.isValid(String(body.userId));
     if (isValidObjectId) {
       userId = new mongoose.Types.ObjectId(body.userId);
-      const user: any = await this.userModel
+      const user: any = await this.usersModel
         .findById(body.userId)
         .lean()
         .exec();
       if (user) {
-        customer = await this.orderService.findOrCreateCustomerByContact(
+        customer = await this.ordersService.findOrCreateCustomerByContact(
           user.phone || syntheticContact,
           {
             name: user.name,
@@ -242,7 +247,7 @@ export class StorefrontOrdersService {
       }
     }
     if (!customer) {
-      customer = await this.orderService.findOrCreateCustomerByContact(
+      customer = await this.ordersService.findOrCreateCustomerByContact(
         syntheticContact,
         {
           name: body.productName,
@@ -578,6 +583,21 @@ export class StorefrontOrdersService {
       )
       .exec();
     if (!doc) throw new NotFoundException('Order not found');
+
+    // Send status update email to customer
+    if (doc.guestEmail) {
+      const orderNumber = doc.orderNumber || doc.orderId;
+      this.mailService
+        .sendOrderStatusUpdateEmail(
+          doc.guestEmail,
+          orderNumber,
+          doc.customerName,
+          status,
+          doc.totalPrice,
+        )
+        .catch((err) => this.logger.error(`Failed to send status update email: ${err.message}`));
+    }
+
     const docs = await this.orderModel
       .find({ orderNumber: doc.orderNumber || doc.orderId })
       .exec();
@@ -641,6 +661,21 @@ export class StorefrontOrdersService {
         },
       )
       .exec();
+
+    // Send status update email to customer
+    if (candidates[0].guestEmail) {
+      const orderNumber = candidates[0].orderNumber || candidates[0].orderId;
+      this.mailService
+        .sendOrderStatusUpdateEmail(
+          candidates[0].guestEmail,
+          orderNumber,
+          candidates[0].customerName,
+          body.status,
+          candidates[0].totalPrice,
+        )
+        .catch((err) => this.logger.error(`Failed to send line item status update email: ${err.message}`));
+    }
+
     const docs = await this.orderModel
       .find({ orderNumber: candidates[0].orderNumber })
       .exec();
