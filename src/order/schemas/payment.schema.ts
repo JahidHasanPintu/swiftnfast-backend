@@ -8,7 +8,7 @@ export const PaymentSchema = new mongoose.Schema(
       ref: 'Customer',
       required: true,
     }, // Reference to Customer ObjectId
-    cashPayment: { type: Number, required: true },
+    cashPayment: { type: Number, default: 0 },
     mfsPayment: {
       selectedMFS: { type: String },
       mfsTrxId: { type: String },
