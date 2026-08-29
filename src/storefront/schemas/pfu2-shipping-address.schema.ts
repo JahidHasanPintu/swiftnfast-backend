@@ -6,6 +6,8 @@ export const Pfu2ShippingAddressSchema = new mongoose.Schema(
     email: { type: String, required: true },
     phone: { type: String, required: true },
     shippingAddress: { type: String, required: true },
+    district: { type: String },
+    isDefault: { type: Boolean, default: false },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Customer',

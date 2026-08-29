@@ -27,9 +27,18 @@ export class AddressService {
       email: string;
       phone: string;
       shippingAddress: string;
+      district?: string;
+      isDefault?: boolean;
     },
   ) {
     const uid = this.requireId(userId);
+    // If new address is default, unset other defaults
+    if (body.isDefault) {
+      await this.shippingModel.updateMany(
+        { userId: uid },
+        { $set: { isDefault: false } },
+      );
+    }
     const address = await this.shippingModel.create({ ...body, userId: uid });
     return { id: address._id, ...body, userId: uid };
   }
@@ -38,7 +47,7 @@ export class AddressService {
     const uid = this.requireId(userId);
     const rows = await this.shippingModel
       .find({ userId: uid })
-      .sort({ createdAt: -1 })
+      .sort({ isDefault: -1, createdAt: -1 })
       .exec();
     return rows.map((r: any) => ({
       id: r._id,
@@ -46,12 +55,21 @@ export class AddressService {
       email: r.email,
       phone: r.phone,
       shippingAddress: r.shippingAddress,
+      district: r.district,
+      isDefault: r.isDefault,
       userId: r.userId,
     }));
   }
 
   async updateShipping(userId: string | undefined, id: string, body: any) {
     const uid = this.requireId(userId);
+    // If setting as default, unset other defaults
+    if (body.isDefault) {
+      await this.shippingModel.updateMany(
+        { userId: uid, _id: { $ne: id } },
+        { $set: { isDefault: false } },
+      );
+    }
     const address = await this.shippingModel
       .findOneAndUpdate({ _id: id, userId: uid }, { $set: body }, { new: true })
       .exec();
