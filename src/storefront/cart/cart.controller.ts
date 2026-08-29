@@ -23,6 +23,7 @@ import {
 import { StorefrontRequest } from '../auth/storefront-request.interface';
 import { CartService } from './cart.service';
 import { MailService } from '../mail/mail.service';
+import { EventsGateway } from '../../common/gateways/events.gateway';
 
 @Public()
 @Controller('api/v1')
@@ -31,6 +32,7 @@ export class CartController {
     private readonly cartService: CartService,
     private readonly storageService: StorageService,
     private readonly mailService: MailService,
+    private readonly eventsGateway: EventsGateway,
   ) {}
 
   private identity(req: StorefrontRequest) {
@@ -69,6 +71,13 @@ export class CartController {
       message: 'Requested cart and order count retrieved successfully',
       data,
     };
+  }
+
+  @Get('cart/unread-count')
+  @UseGuards(JwtAuthGuard)
+  async unreadPriceRequestCount() {
+    const count = await this.cartService.getUnreadPriceRequestCount();
+    return { success: true, data: { count } };
   }
 
   @Patch('cart/:id/update-item')
@@ -181,6 +190,13 @@ export class CartController {
     // Send price request notification to admin (non-blocking)
     const customerName = req.user?.userId || body.guestContact || 'Guest';
     this.mailService.sendPriceRequestEmail(customerName, id).catch(() => {});
+
+    // Emit real-time notification to admin
+    this.eventsGateway.notifyNewPriceRequest({
+      cartId: id,
+      customerName,
+    });
+
     return { success: true, message: 'Price Request Submitted', data };
   }
 

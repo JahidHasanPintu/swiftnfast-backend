@@ -9,6 +9,7 @@ import { Model } from 'mongoose';
 import { OrderService } from 'src/order/order.service';
 import { CartService } from '../cart/cart.service';
 import { generateImageUrl } from '../utils/image-url.util';
+import { EventsGateway } from '../../common/gateways/events.gateway';
 
 const WEIGHT_CHARGES: Record<string, number> = { USA: 500, UK: 400, UAE: 300 };
 const EXCHANGE_RATES: Record<string, number> = { USA: 140, UK: 140, UAE: 30 };
@@ -36,6 +37,7 @@ export class StorefrontOrdersService {
     @InjectModel('Pfu2Payment') private readonly paymentModel: Model<any>,
     private readonly orderService: OrderService,
     private readonly cartService: CartService,
+    private readonly eventsGateway: EventsGateway,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -114,6 +116,7 @@ export class StorefrontOrdersService {
         orderId: orderNumber,
         orderNumber,
         orderType,
+        orderSource: 'website',
         customerId: customer._id,
         customerName: customer.customerName || shippingName,
         contactNo: shippingPhone,
@@ -174,6 +177,13 @@ export class StorefrontOrdersService {
     await this.cartService.deleteById(body.cartId);
 
     const order = await this.findByOrderNumber(orderNumber);
+
+    // Emit real-time notification to admin
+    this.eventsGateway.notifyNewPreStockOrder({
+      orderNumber,
+      customerName: shippingName,
+    });
+
     return { id: orderNumber, orderNumber, ...order };
   }
 
@@ -244,6 +254,7 @@ export class StorefrontOrdersService {
       orderId: orderNumber,
       orderNumber,
       orderType: 'import',
+      orderSource: 'website',
       customerId: customer._id,
       customerName: customer.customerName,
       contactNo: customer.contactNumber,
@@ -272,6 +283,13 @@ export class StorefrontOrdersService {
     };
 
     const created = await this.orderModel.create(doc);
+
+    // Emit real-time notification to admin
+    this.eventsGateway.notifyNewOrder({
+      orderNumber,
+      customerName: customer.customerName,
+    });
+
     return { id: created._id, orderNumber, ...created.toObject() };
   }
 
@@ -460,7 +478,17 @@ export class StorefrontOrdersService {
     if (query.status) filter.status = query.status;
     if (query.userId) filter.userId = query.userId;
     if (query.paymentMethod) filter.paymentMethod = query.paymentMethod;
-    if (query.orderType) filter.orderType = query.orderType;
+    if (query.orderType) {
+      filter.orderType = query.orderType;
+    } else {
+      // Exclude prestock orders by default (they have their own page).
+      // Also include orders where orderType is not set (old admin orders).
+      filter.$or = [
+        { orderType: { $ne: 'prestock' } },
+        { orderType: { $exists: false } },
+        { orderType: null },
+      ];
+    }
     if (query.orderNumber) {
       const rx = new RegExp(
         String(query.orderNumber).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
@@ -658,5 +686,33 @@ export class StorefrontOrdersService {
     const doc = await this.orderModel.findByIdAndDelete(id).exec();
     if (!doc) throw new NotFoundException('Order not found');
     return { success: true, message: 'Order deleted successfully' };
+  }
+
+  // -------------------------------------------------------------------------
+  // Pending counts for admin sidebar badges
+  // -------------------------------------------------------------------------
+  async getPendingWebsiteOrderCount(): Promise<number> {
+    // Count pending orders that are NOT prestock (import orders from website)
+    // Also includes old orders without orderType field
+    return this.orderModel
+      .countDocuments({
+        $or: [
+          { orderType: { $ne: 'prestock' } },
+          { orderType: { $exists: false } },
+          { orderType: null },
+        ],
+        status: { $in: ['PENDING', 'Pending'] },
+      })
+      .exec();
+  }
+
+  async getPendingPreStockOrderCount(): Promise<number> {
+    // Count pending prestock orders
+    return this.orderModel
+      .countDocuments({
+        orderType: 'prestock',
+        status: { $in: ['PENDING', 'Pending'] },
+      })
+      .exec();
   }
 }

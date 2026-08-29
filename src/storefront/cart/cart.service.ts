@@ -555,4 +555,10 @@ export class CartService {
     const orderCount = cartCount;
     return { cartCount, orderCount };
   }
+
+  async getUnreadPriceRequestCount(): Promise<number> {
+    return this.cartModel
+      .countDocuments({ isRequested: true, isRead: false })
+      .exec();
+  }
 }

@@ -11,7 +11,8 @@ export class MailService {
   private readonly clientUrl: string;
 
   constructor(private readonly config: ConfigService) {
-    this.from = this.config.get('SMTP_FROM') || this.config.get('SMTP_USER');
+    const smtpFrom = this.config.get('SMTP_FROM') || this.config.get('SMTP_USER');
+    this.from = `PFU2 <${smtpFrom}>`;
     this.orderEmail = this.config.get('ORDER_EMAIL');
     this.clientUrl = this.config.get('CLIENT_URL') || 'http://localhost:5173';
 

@@ -21,6 +21,7 @@ import { ShipmentModule } from './shipment/shipment.module';
 import { DropShipModule } from './dropship/dropship.module';
 import { GlobalJwtAuthGuard } from './common/guards/global-jwt-auth.guard';
 import { StorefrontModule } from './storefront/storefront.module';
+import { NotificationsModule } from './common/notifications.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { StorefrontModule } from './storefront/storefront.module';
     ShipmentModule,
     DropShipModule,
     StorefrontModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   // providers: [AppService],

@@ -96,6 +96,22 @@ export class StorefrontOrdersController {
     return { success: true, message: 'Order retrieved successfully', data };
   }
 
+  // ---- Pending counts for admin sidebar badges (MUST be before :id) -------
+
+  @Get('orders/pending-count')
+  @UseGuards(JwtAuthGuard)
+  async getPendingWebsiteOrderCount() {
+    const count = await this.ordersService.getPendingWebsiteOrderCount();
+    return { success: true, data: { count } };
+  }
+
+  @Get('orders/prestock-pending-count')
+  @UseGuards(JwtAuthGuard)
+  async getPendingPreStockOrderCount() {
+    const count = await this.ordersService.getPendingPreStockOrderCount();
+    return { success: true, data: { count } };
+  }
+
   @Get('orders/:id')
   @UseGuards(StorefrontOptionalAuthGuard)
   async findOne(@Param('id') id: string) {

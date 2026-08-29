@@ -27,7 +27,9 @@
     "@nestjs/mongoose": "^10.0.1",
     "@nestjs/passport": "^10.0.1",
     "@nestjs/platform-express": "^9.0.0",
+    "@nestjs/platform-socket.io": "^9.4.3",
     "@nestjs/swagger": "^6.3.0",
+    "@nestjs/websockets": "^9.4.3",
     "@types/hbs": "^4.0.4",
     "@types/nodemailer": "^8.0.1",
     "axios": "^1.16.1",
@@ -54,6 +56,7 @@
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.2.0",
     "sharp": "^0.32.6",
+    "socket.io": "^4.8.3",
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {

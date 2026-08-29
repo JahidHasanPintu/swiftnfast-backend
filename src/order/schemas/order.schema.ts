@@ -50,6 +50,11 @@ export const OrderSchema = new mongoose.Schema(
     shippingAddress: { type: mongoose.Schema.Types.Mixed },
     billingAddress: { type: mongoose.Schema.Types.Mixed },
     paymentMethod: { type: String },
+    orderSource: {
+      type: String,
+      enum: ['website', 'admin'],
+      default: 'admin',
+    },
     isRead: { type: Boolean, default: false },
     status: {
       type: String,
@@ -89,5 +94,6 @@ OrderSchema.index({ orderType: 1 });
 OrderSchema.index({ customerId: 1 });
 OrderSchema.index({ userId: 1 });
 OrderSchema.index({ orderDate: -1 });
+OrderSchema.index({ orderSource: 1, status: 1 });
 
 export default OrderSchema;
