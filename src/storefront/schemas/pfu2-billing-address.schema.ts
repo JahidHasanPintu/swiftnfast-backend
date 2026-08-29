@@ -7,7 +7,7 @@ export const Pfu2BillingAddressSchema = new mongoose.Schema(
     phone: { type: String, required: true },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Pfu2User',
+      ref: 'Customer',
       required: true,
     },
   },

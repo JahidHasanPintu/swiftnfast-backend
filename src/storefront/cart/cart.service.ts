@@ -48,7 +48,7 @@ function calculateCartTotals(
 export class CartService {
   constructor(
     @InjectModel('Cart') private readonly cartModel: Model<CartDocument>,
-    @InjectModel('Pfu2User') private readonly userModel: Model<any>,
+    @InjectModel('Customer') private readonly userModel: Model<any>,
     @InjectModel('Product') private readonly productModel: Model<any>,
   ) {}
 
@@ -60,10 +60,17 @@ export class CartService {
     if (cart.userId) {
       user = await this.userModel
         .findById(cart.userId)
-        .select('name email phone role')
+        .select('customerName emailAddress contactNumber phone role')
         .lean()
         .exec();
-      if (user) user = { id: user._id, name: user.name, email: user.email, phone: user.phone, role: user.role };
+      if (user)
+        user = {
+          id: user._id,
+          name: user.customerName,
+          email: user.emailAddress,
+          phone: user.contactNumber || user.phone,
+          role: user.role,
+        };
     }
 
     const enrichedItems = [];

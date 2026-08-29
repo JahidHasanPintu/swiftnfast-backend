@@ -30,7 +30,7 @@ export const CartItemSchema = new mongoose.Schema(
 
 export const CartSchema = new mongoose.Schema(
   {
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'Pfu2User' },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
     guestToken: { type: String, unique: true, sparse: true },
     guestContact: { type: String },
     isRequested: { type: Boolean, default: false },

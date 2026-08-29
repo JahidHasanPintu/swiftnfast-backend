@@ -8,7 +8,7 @@ export const Pfu2ShippingAddressSchema = new mongoose.Schema(
     shippingAddress: { type: String, required: true },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Pfu2User',
+      ref: 'Customer',
       required: true,
     },
   },

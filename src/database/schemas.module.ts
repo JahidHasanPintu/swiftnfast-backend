@@ -17,7 +17,6 @@ import {
   Transaction,
   TransactionSchema,
 } from 'src/transactions/schemas/transaction.schema';
-import Pfu2UserSchema from 'src/storefront/schemas/pfu2-user.schema';
 import CategorySchema from 'src/storefront/schemas/category.schema';
 import BrandSchema from 'src/storefront/schemas/brand.schema';
 import ProductSchema from 'src/storefront/schemas/product.schema';
@@ -57,7 +56,6 @@ import Pfu2PaymentSchema from 'src/storefront/schemas/pfu2-payment.schema';
       { name: 'shipping-address', schema: ShippingAddressSchema },
       { name: Account.name, schema: AccountSchema },
       { name: Transaction.name, schema: TransactionSchema },
-      { name: 'Pfu2User', schema: Pfu2UserSchema },
       { name: 'Category', schema: CategorySchema },
       { name: 'Brand', schema: BrandSchema },
       { name: 'Product', schema: ProductSchema },

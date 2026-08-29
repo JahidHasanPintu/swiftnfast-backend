@@ -64,7 +64,7 @@ describe('StorefrontOrdersService', () => {
         StorefrontOrdersService,
         { provide: getModelToken('Orders'), useValue: mockOrderModel },
         { provide: getModelToken('Product'), useValue: mockProductModel },
-        { provide: getModelToken('Pfu2User'), useValue: mockUserModel },
+        { provide: getModelToken('Customer'), useValue: mockUserModel },
         { provide: getModelToken('Pfu2Payment'), useValue: mockPaymentModel },
         { provide: OrderService, useValue: mockOrderService },
         { provide: CartService, useValue: mockCartService },

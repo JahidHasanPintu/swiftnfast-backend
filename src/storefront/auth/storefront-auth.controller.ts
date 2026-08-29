@@ -28,7 +28,13 @@ export class StorefrontAuthController {
   @Post('register')
   @HttpCode(201)
   async register(
-    @Body() body: { name: string; email: string; password: string },
+    @Body()
+    body: {
+      name: string;
+      email: string;
+      password: string;
+      phone?: string;
+    },
   ) {
     await this.authService.register(body);
     return {

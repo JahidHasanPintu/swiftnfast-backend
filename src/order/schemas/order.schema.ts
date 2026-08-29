@@ -38,7 +38,7 @@ export const OrderSchema = new mongoose.Schema(
     ssImageUrl: { type: String },
     productImageUrl: { type: String },
     // Pre-stock fields (pfu2 legacy cart-based order)
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'Pfu2User' },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
     isGuest: { type: Boolean, default: false },
     guestEmail: { type: String },
     guestContact: { type: String },

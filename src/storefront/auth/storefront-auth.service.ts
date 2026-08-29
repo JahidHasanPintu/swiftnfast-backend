@@ -8,58 +8,79 @@ import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { StorefrontJwtService } from './storefront-jwt.service';
-import { Pfu2UserDocument } from '../interfaces/pfu2-user.interface';
+import { CustomerDocument } from '../../order/interfaces/customer.interface';
 import { Logger } from '@nestjs/common';
 import { MailService } from '../mail/mail.service';
 
 const OTP_LIFETIME_MS = 5 * 60 * 1000; // 5 minutes
 const RESET_TOKEN_LIFETIME_MS = 15 * 60 * 1000; // 15 minutes
 
-function sanitizeUser(user: Pfu2UserDocument) {
+function sanitizeUser(user: CustomerDocument) {
   const doc = user.toObject();
   delete doc.password;
   delete doc.otp;
   delete doc.otpExpiry;
   delete doc.resetToken;
   delete doc.resetTokenExpiry;
-  return doc;
+  // Map customer fields to frontend-friendly names
+  return {
+    ...doc,
+    id: doc._id,
+    name: doc.customerName,
+    email: doc.emailAddress,
+    phone: doc.contactNumber || doc.phone,
+  };
 }
 
 @Injectable()
 export class StorefrontAuthService {
   private readonly logger = new Logger('StorefrontAuth');
   constructor(
-    @InjectModel('Pfu2User')
-    private readonly userModel: Model<Pfu2UserDocument>,
+    @InjectModel('Customer')
+    private readonly customerModel: Model<CustomerDocument>,
     private readonly jwtService: StorefrontJwtService,
     private readonly mailService: MailService,
   ) {}
 
   private async findVerifiedByEmail(email: string) {
-    return this.userModel
-      .findOne({ email: (email || '').toLowerCase(), isDeleted: { $ne: true } })
+    return this.customerModel
+      .findOne({
+        emailAddress: (email || '').toLowerCase(),
+        isDeleted: { $ne: true },
+      })
       .exec();
   }
 
-  async register(body: { name: string; email: string; password: string }) {
+  async register(body: {
+    name: string;
+    email: string;
+    password: string;
+    phone?: string;
+  }) {
     const email = (body.email || '').toLowerCase();
-    const existing = await this.userModel.findOne({ email }).exec();
+    const existing = await this.customerModel
+      .findOne({ emailAddress: email })
+      .exec();
     if (existing) {
       throw new BadRequestException('User already exists');
     }
     const password = await bcrypt.hash(body.password, 10);
-    const user = new this.userModel({
-      name: body.name,
-      email,
+    const customer = new this.customerModel({
+      customerName: body.name,
+      emailAddress: email,
+      contactNumber: body.phone || '',
+      phone: body.phone || '',
       password,
       role: 'user',
-      isVerified: true, // pfu2 register flow verifies via email; keep OTP-based login simple
+      isVerified: true,
       isDeleted: false,
       needsPasswordChange: false,
       otpVerified: false,
+      grandTotal: 0,
+      sourceOfOrder: 'storefront',
     });
-    await user.save();
-    return { user, created: true };
+    await customer.save();
+    return { user: customer, created: true };
   }
 
   async login(body: { email: string; password: string }) {
@@ -72,12 +93,17 @@ export class StorefrontAuthService {
         'Please verify your email before logging in',
       );
     }
+    if (!user.password) {
+      throw new BadRequestException(
+        'This account does not have a password. Please use OTP login.',
+      );
+    }
     const ok = await bcrypt.compare(body.password, user.password);
     if (!ok) {
       throw new BadRequestException('Password does not match');
     }
     const accessToken = this.jwtService.sign({
-      email: user.email,
+      email: user.emailAddress,
       userId: String(user._id),
       role: user.role,
     });
@@ -86,7 +112,9 @@ export class StorefrontAuthService {
 
   async requestOtp(body: { identifier: string }) {
     const email = (body.identifier || '').toLowerCase();
-    const user = await this.userModel.findOne({ email }).exec();
+    const user = await this.customerModel
+      .findOne({ emailAddress: email })
+      .exec();
     if (!user) {
       throw new NotFoundException('User not found with this email');
     }
@@ -104,7 +132,9 @@ export class StorefrontAuthService {
 
   async verifyOtp(body: { identifier: string; otp: string }) {
     const email = (body.identifier || '').toLowerCase();
-    const user = await this.userModel.findOne({ email }).exec();
+    const user = await this.customerModel
+      .findOne({ emailAddress: email })
+      .exec();
     if (!user) {
       throw new NotFoundException('User not found');
     }
@@ -125,7 +155,7 @@ export class StorefrontAuthService {
     user.isVerified = true;
     await user.save();
     const accessToken = this.jwtService.sign({
-      email: user.email,
+      email: user.emailAddress,
       userId: String(user._id),
       role: user.role,
     });
@@ -134,10 +164,15 @@ export class StorefrontAuthService {
 
   async forgotPassword(body: { email: string }) {
     const email = (body.email || '').toLowerCase();
-    const user = await this.userModel.findOne({ email }).exec();
+    const user = await this.customerModel
+      .findOne({ emailAddress: email })
+      .exec();
     // Always return success to prevent email enumeration
     if (!user) {
-      return { success: true, message: 'If the email exists, a reset link has been sent' };
+      return {
+        success: true,
+        message: 'If the email exists, a reset link has been sent',
+      };
     }
     const resetToken = crypto.randomBytes(32).toString('hex');
     user.resetToken = resetToken;
@@ -146,14 +181,19 @@ export class StorefrontAuthService {
     this.mailService.sendPasswordResetEmail(email, resetToken).catch((err) => {
       this.logger.error(`Password reset email failed for ${email}`, err.stack);
     });
-    return { success: true, message: 'If the email exists, a reset link has been sent' };
+    return {
+      success: true,
+      message: 'If the email exists, a reset link has been sent',
+    };
   }
 
   async resetPassword(body: { token: string; newPassword: string }) {
-    const user = await this.userModel.findOne({
-      resetToken: body.token,
-      resetTokenExpiry: { $gt: new Date() },
-    }).exec();
+    const user = await this.customerModel
+      .findOne({
+        resetToken: body.token,
+        resetTokenExpiry: { $gt: new Date() },
+      })
+      .exec();
     if (!user) {
       throw new BadRequestException('Invalid or expired reset token');
     }
