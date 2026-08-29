@@ -10,6 +10,7 @@ import { StorefrontUsersModule } from './users/storefront-users.module';
 import { CartModule } from './cart/cart.module';
 import { AddressModule } from './addresses/address.module';
 import { PaymentModule } from './payment/payment.module';
+import { PaymentMethodModule } from './payment-methods/payment-method.module';
 import { StorefrontOrdersModule } from './orders/storefront-orders.module';
 import { AdminModule } from './admin/admin.module';
 import { MailModule } from './mail/mail.module';
@@ -27,6 +28,7 @@ import { MailModule } from './mail/mail.module';
     CartModule,
     AddressModule,
     PaymentModule,
+    PaymentMethodModule,
     StorefrontOrdersModule,
     AdminModule,
     MailModule,

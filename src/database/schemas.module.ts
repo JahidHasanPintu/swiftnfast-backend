@@ -26,6 +26,7 @@ import FaqSchema from 'src/storefront/schemas/faq.schema';
 import PartnerSchema from 'src/storefront/schemas/partner.schema';
 import SettingSchema from 'src/storefront/schemas/setting.schema';
 import CartSchema from 'src/storefront/schemas/cart.schema';
+import PaymentMethodSchema from 'src/storefront/schemas/payment-method.schema';
 import Pfu2ShippingAddressSchema from 'src/storefront/schemas/pfu2-shipping-address.schema';
 import Pfu2BillingAddressSchema from 'src/storefront/schemas/pfu2-billing-address.schema';
 import Pfu2PaymentSchema from 'src/storefront/schemas/pfu2-payment.schema';
@@ -65,6 +66,7 @@ import Pfu2PaymentSchema from 'src/storefront/schemas/pfu2-payment.schema';
       { name: 'Partner', schema: PartnerSchema },
       { name: 'Setting', schema: SettingSchema },
       { name: 'Cart', schema: CartSchema },
+      { name: 'PaymentMethod', schema: PaymentMethodSchema },
       { name: 'Pfu2ShippingAddress', schema: Pfu2ShippingAddressSchema },
       { name: 'Pfu2BillingAddress', schema: Pfu2BillingAddressSchema },
       { name: 'Pfu2Payment', schema: Pfu2PaymentSchema },
