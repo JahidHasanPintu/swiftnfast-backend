@@ -84,6 +84,15 @@ export class CartController {
   @UseGuards(JwtAuthGuard)
   async updateItem(@Param('id') id: string, @Body() body: any) {
     const data = await this.cartService.updateItem(id, body);
+
+    // Send email notification if cart is now ready to order
+    if (data.readyToOrder && data.user?.email) {
+      const customerName = data.user.name || 'Customer';
+      this.mailService
+        .sendPriceUpdatedEmail(data.user.email, customerName, id)
+        .catch(() => {});
+    }
+
     return { success: true, message: 'Cart item updated successfully', data };
   }
 

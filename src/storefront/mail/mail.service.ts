@@ -108,6 +108,89 @@ export class MailService {
     }
   }
 
+  async sendPriceUpdatedEmail(
+    email: string,
+    customerName: string,
+    cartId: string,
+  ): Promise<void> {
+    const cartUrl = `${this.clientUrl}/cart`;
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="margin: 0; padding: 0; background-color: #f3f4f6; font-family: Arial, sans-serif;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f3f4f6; padding: 40px 20px;">
+          <tr>
+            <td align="center">
+              <table width="480" cellpadding="0" cellspacing="0" style="background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                <!-- Header -->
+                <tr>
+                  <td style="background: linear-gradient(135deg, #1f2937, #374151); padding: 30px; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 700;">PFU2</h1>
+                    <p style="color: #9ca3af; margin: 5px 0 0 0; font-size: 13px;">Price Update Notification</p>
+                  </td>
+                </tr>
+                <!-- Status Badge -->
+                <tr>
+                  <td style="padding: 30px 30px 0 30px; text-align: center;">
+                    <div style="display: inline-block; background: #22c55e15; border: 2px solid #22c55e; border-radius: 50px; padding: 12px 30px;">
+                      <span style="font-size: 20px; margin-right: 8px;">✓</span>
+                      <span style="color: #22c55e; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">Price Updated</span>
+                    </div>
+                  </td>
+                </tr>
+                <!-- Content -->
+                <tr>
+                  <td style="padding: 25px 30px;">
+                    <p style="color: #374151; font-size: 16px; margin: 0 0 10px 0;">Dear <strong>${customerName}</strong>,</p>
+                    <p style="color: #6b7280; font-size: 15px; line-height: 1.6; margin: 0 0 20px 0;">Great news! The prices for your requested items have been updated. You can now review the prices and place your order.</p>
+                    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 15px; margin: 20px 0;">
+                      <p style="margin: 0; color: #166534; font-size: 14px;">Your cart is ready for checkout. Please review the updated prices and complete your order.</p>
+                    </div>
+                  </td>
+                </tr>
+                <!-- CTA Button -->
+                <tr>
+                  <td style="padding: 0 30px 30px 30px; text-align: center;">
+                    <a href="${cartUrl}" style="display: inline-block; background: #22c55e; color: #ffffff; padding: 14px 40px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px;">Go to Cart & Place Order</a>
+                  </td>
+                </tr>
+                <!-- Divider -->
+                <tr>
+                  <td style="padding: 0 30px;">
+                    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 0;">
+                  </td>
+                </tr>
+                <!-- Footer -->
+                <tr>
+                  <td style="padding: 20px 30px; text-align: center;">
+                    <p style="color: #9ca3af; font-size: 12px; margin: 0 0 5px 0;">If you have any questions, please contact our support team.</p>
+                    <p style="color: #9ca3af; font-size: 12px; margin: 0;">This is an automated email. Please do not reply.</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>`;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.from,
+        to: email,
+        subject: `Prices Updated - Ready to Order - PFU2`,
+        html,
+      });
+      this.logger.log(`Price updated email sent to ${email} for cart ${cartId}`);
+    } catch (err) {
+      this.logger.error(`Failed to send price updated email to ${email}`, err.stack);
+    }
+  }
+
   async sendPasswordResetEmail(email: string, resetToken: string): Promise<void> {
     const resetUrl = `${this.clientUrl}/reset-password?token=${resetToken}`;
     const html = `

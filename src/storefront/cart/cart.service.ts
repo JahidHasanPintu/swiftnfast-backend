@@ -60,10 +60,10 @@ export class CartService {
     if (cart.userId) {
       user = await this.userModel
         .findById(cart.userId)
-        .select('name email')
+        .select('name email phone role')
         .lean()
         .exec();
-      if (user) user = { id: user._id, name: user.name, email: user.email };
+      if (user) user = { id: user._id, name: user.name, email: user.email, phone: user.phone, role: user.role };
     }
 
     const enrichedItems = [];
