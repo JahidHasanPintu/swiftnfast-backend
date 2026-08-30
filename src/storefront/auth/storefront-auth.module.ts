@@ -8,9 +8,10 @@ import {
 } from './storefront-auth.guards';
 import { DatabaseSchemasModule } from 'src/database/schemas.module';
 import { MailModule } from '../mail/mail.module';
+import { SmsModule } from '../sms/sms.module';
 
 @Module({
-  imports: [DatabaseSchemasModule, MailModule],
+  imports: [DatabaseSchemasModule, MailModule, SmsModule],
   controllers: [StorefrontAuthController],
   providers: [
     StorefrontAuthService,

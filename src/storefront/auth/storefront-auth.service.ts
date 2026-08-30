@@ -11,9 +11,18 @@ import { StorefrontJwtService } from './storefront-jwt.service';
 import { CustomerDocument } from '../../order/interfaces/customer.interface';
 import { Logger } from '@nestjs/common';
 import { MailService } from '../mail/mail.service';
+import { SmsService } from '../sms/sms.service';
 
 const OTP_LIFETIME_MS = 5 * 60 * 1000; // 5 minutes
 const RESET_TOKEN_LIFETIME_MS = 15 * 60 * 1000; // 15 minutes
+
+function isEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function isPhone(value: string): boolean {
+  return /^[0-9+]{7,15}$/.test(value.replace(/\s/g, ''));
+}
 
 function sanitizeUser(user: CustomerDocument) {
   const doc = user.toObject();
@@ -40,6 +49,7 @@ export class StorefrontAuthService {
     private readonly customerModel: Model<CustomerDocument>,
     private readonly jwtService: StorefrontJwtService,
     private readonly mailService: MailService,
+    private readonly smsService: SmsService,
   ) {}
 
   private async findVerifiedByEmail(email: string) {
@@ -110,31 +120,87 @@ export class StorefrontAuthService {
     return { ...sanitizeUser(user), accessToken };
   }
 
-  async requestOtp(body: { identifier: string }) {
-    const email = (body.identifier || '').toLowerCase();
-    const user = await this.customerModel
-      .findOne({ emailAddress: email })
+  private async findByPhone(phone: string) {
+    const digits = phone.replace(/\D/g, '');
+    // Try multiple formats for flexible matching
+    const variants = [
+      digits,
+      digits.startsWith('0') ? digits : `0${digits}`,
+      digits.startsWith('0') ? `88${digits.slice(1)}` : `880${digits}`,
+    ];
+    return this.customerModel
+      .findOne({
+        $or: [
+          { contactNumber: { $in: variants } },
+          { phone: { $in: variants } },
+        ],
+        isDeleted: { $ne: true },
+      })
       .exec();
-    if (!user) {
-      throw new NotFoundException('User not found with this email');
+  }
+
+  async requestOtp(body: { identifier: string }) {
+    const identifier = (body.identifier || '').trim();
+    const isPhoneId = isPhone(identifier) && !isEmail(identifier);
+
+    let user: CustomerDocument | null;
+
+    if (isPhoneId) {
+      user = await this.findByPhone(identifier);
+      if (!user) {
+        throw new NotFoundException('User not found with this phone number');
+      }
+    } else {
+      const email = identifier.toLowerCase();
+      user = await this.customerModel
+        .findOne({ emailAddress: email, isDeleted: { $ne: true } })
+        .exec();
+      if (!user) {
+        throw new NotFoundException('User not found with this email');
+      }
     }
+
     const otp = String(Math.floor(100000 + Math.random() * 900000));
     user.otp = otp;
     user.otpExpiry = new Date(Date.now() + OTP_LIFETIME_MS);
     user.otpVerified = false;
     await user.save();
-    // Send OTP via email (non-blocking)
-    this.mailService.sendOtpEmail(email, otp).catch((err) => {
-      this.logger.error(`OTP email failed for ${email}`, err.stack);
-    });
-    return { email, otp };
+
+    // Dispatch OTP via SMS or email (non-blocking)
+    if (isPhoneId) {
+      const phone = user.contactNumber || user.phone || identifier;
+      this.smsService
+        .sendSms(phone, `Your PFU2 OTP is ${otp}`, 'OTP')
+        .catch((err) => {
+          this.logger.error(`SMS OTP failed for ${phone}`, err.stack);
+        });
+    } else {
+      const email = identifier.toLowerCase();
+      this.mailService.sendOtpEmail(email, otp).catch((err) => {
+        this.logger.error(`OTP email failed for ${email}`, err.stack);
+      });
+    }
+
+    return { identifier, otp };
   }
 
   async verifyOtp(body: { identifier: string; otp: string }) {
-    const email = (body.identifier || '').toLowerCase();
-    const user = await this.customerModel
-      .findOne({ emailAddress: email })
-      .exec();
+    const identifier = (body.identifier || '').trim();
+    const isPhoneId = isPhone(identifier) && !isEmail(identifier);
+
+    let user: CustomerDocument | null;
+
+    if (isPhoneId) {
+      user = await this.findByPhone(identifier);
+    } else {
+      user = await this.customerModel
+        .findOne({
+          emailAddress: identifier.toLowerCase(),
+          isDeleted: { $ne: true },
+        })
+        .exec();
+    }
+
     if (!user) {
       throw new NotFoundException('User not found');
     }
