@@ -24,6 +24,7 @@ import { StorefrontRequest } from '../auth/storefront-request.interface';
 import { CartService } from './cart.service';
 import { MailService } from '../mail/mail.service';
 import { EventsGateway } from '../../common/gateways/events.gateway';
+import { NotificationService } from '../notifications/notification.service';
 
 @Public()
 @Controller('api/v1')
@@ -33,6 +34,7 @@ export class CartController {
     private readonly storageService: StorageService,
     private readonly mailService: MailService,
     private readonly eventsGateway: EventsGateway,
+    private readonly notificationService: NotificationService,
   ) {}
 
   private identity(req: StorefrontRequest) {
@@ -85,12 +87,15 @@ export class CartController {
   async updateItem(@Param('id') id: string, @Body() body: any) {
     const data = await this.cartService.updateItem(id, body);
 
-    // Send email notification if cart is now ready to order
-    if (data.readyToOrder && data.user?.email) {
+    // Send email + SMS notification if cart is now ready to order
+    if (data.readyToOrder && data.user) {
       const customerName = data.user.name || 'Customer';
-      this.mailService
-        .sendPriceUpdatedEmail(data.user.email, customerName, id)
-        .catch(() => {});
+      this.notificationService.notify('PRICE_UPDATED', {
+        customerName,
+        customerEmail: data.user.email,
+        customerPhone: data.user.phone || data.user.contactNumber,
+        cartId: id,
+      });
     }
 
     return { success: true, message: 'Cart item updated successfully', data };

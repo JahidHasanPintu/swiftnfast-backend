@@ -13,8 +13,8 @@ import { Logger } from '@nestjs/common';
 import { MailService } from '../mail/mail.service';
 import { SmsService } from '../sms/sms.service';
 
-const OTP_LIFETIME_MS = 5 * 60 * 1000; // 5 minutes
-const RESET_TOKEN_LIFETIME_MS = 15 * 60 * 1000; // 15 minutes
+const OTP_LIFETIME_MS = 5 * 60 * 1000;
+const RESET_TOKEN_LIFETIME_MS = 15 * 60 * 1000;
 
 function isEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -31,7 +31,6 @@ function sanitizeUser(user: CustomerDocument) {
   delete doc.otpExpiry;
   delete doc.resetToken;
   delete doc.resetTokenExpiry;
-  // Map customer fields to frontend-friendly names
   return {
     ...doc,
     id: doc._id,
@@ -122,7 +121,6 @@ export class StorefrontAuthService {
 
   private async findByPhone(phone: string) {
     const digits = phone.replace(/\D/g, '');
-    // Try multiple formats for flexible matching
     const variants = [
       digits,
       digits.startsWith('0') ? digits : `0${digits}`,
@@ -166,7 +164,6 @@ export class StorefrontAuthService {
     user.otpVerified = false;
     await user.save();
 
-    // Dispatch OTP via SMS or email (non-blocking)
     if (isPhoneId) {
       const phone = user.contactNumber || user.phone || identifier;
       this.smsService
@@ -233,7 +230,6 @@ export class StorefrontAuthService {
     const user = await this.customerModel
       .findOne({ emailAddress: email })
       .exec();
-    // Always return success to prevent email enumeration
     if (!user) {
       return {
         success: true,

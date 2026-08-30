@@ -28,12 +28,6 @@ export class SmsService {
       this.config.get<string>('SMS_BASE_URL') || 'http://bulksmsbd.net/api';
   }
 
-  /**
-   * Send a single SMS via BulkSMSBD and log the result.
-   * @param to - Bangladeshi number: "01712345678", "8801712345678", etc.
-   * @param message - SMS body (max ~160 chars for single segment)
-   * @param purpose - 'OTP' | 'ORDER_STATUS' | 'MARKETING' | 'MANUAL' etc.
-   */
   async sendSms(
     to: string,
     message: string,
@@ -66,7 +60,6 @@ export class SmsService {
       status = 'FAILED';
     }
 
-    // Always log
     try {
       await this.smsLogModel.create({
         to: number,
@@ -87,13 +80,6 @@ export class SmsService {
     };
   }
 
-  /**
-   * Send bulk SMS to multiple recipients.
-   * @param recipients - Array of phone numbers
-   * @param message - SMS body
-   * @param purpose - Purpose tag for logging
-   * @returns Summary of sent/failed counts
-   */
   async sendBulkSms(
     recipients: string[],
     message: string,
@@ -127,9 +113,6 @@ export class SmsService {
     return { sent, failed, results: smsResults };
   }
 
-  /**
-   * Check BulkSMSBD account credit balance.
-   */
   async getBalance(): Promise<any> {
     const url = `${this.baseUrl}/getBalanceApi`;
     const { data } = await axios.get(url, {
@@ -139,9 +122,38 @@ export class SmsService {
     return data;
   }
 
-  /**
-   * Normalize any BD phone format to 880XXXXXXXXXX.
-   */
+  async getSmsLogs(query: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    purpose?: string;
+    to?: string;
+  }) {
+    const page = Math.max(1, query.page || 1);
+    const limit = Math.max(1, Math.min(100, query.limit || 20));
+    const skip = (page - 1) * limit;
+
+    const filter: any = {};
+    if (query.status) filter.status = query.status;
+    if (query.purpose) filter.purpose = query.purpose;
+    if (query.to) filter.to = { $regex: query.to, $options: 'i' };
+
+    const [logs, total] = await Promise.all([
+      this.smsLogModel
+        .find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      this.smsLogModel.countDocuments(filter),
+    ]);
+
+    return {
+      logs,
+      meta: { page, limit, total, totalPage: Math.ceil(total / limit) },
+    };
+  }
+
   normalizePhone(phone: string): string {
     const digits = String(phone).replace(/\D/g, '');
     if (digits.startsWith('880')) return digits;
@@ -149,9 +161,6 @@ export class SmsService {
     return '880' + digits;
   }
 
-  /**
-   * Detect if an identifier is a phone number (vs email).
-   */
   isPhone(identifier: string): boolean {
     return /^[0-9+]{7,15}$/.test(identifier.replace(/\s/g, ''));
   }

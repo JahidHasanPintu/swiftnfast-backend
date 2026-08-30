@@ -14,6 +14,8 @@ import { PaymentMethodModule } from './payment-methods/payment-method.module';
 import { StorefrontOrdersModule } from './orders/storefront-orders.module';
 import { AdminModule } from './admin/admin.module';
 import { MailModule } from './mail/mail.module';
+import { SmsModule } from './sms/sms.module';
+import { NotificationModule } from './notifications/notification.module';
 
 @Module({
   imports: [
@@ -32,6 +34,8 @@ import { MailModule } from './mail/mail.module';
     StorefrontOrdersModule,
     AdminModule,
     MailModule,
+    SmsModule,
+    NotificationModule,
   ],
 })
 export class StorefrontModule {}

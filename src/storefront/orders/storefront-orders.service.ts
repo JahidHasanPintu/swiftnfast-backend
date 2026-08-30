@@ -12,6 +12,7 @@ import { CartService } from '../cart/cart.service';
 import { MailService } from '../mail/mail.service';
 import { generateImageUrl } from '../utils/image-url.util';
 import { EventsGateway } from '../../common/gateways/events.gateway';
+import { NotificationService } from '../notifications/notification.service';
 
 const WEIGHT_CHARGES: Record<string, number> = { USA: 500, UK: 400, UAE: 300 };
 const EXCHANGE_RATES: Record<string, number> = { USA: 140, UK: 140, UAE: 30 };
@@ -43,6 +44,7 @@ export class StorefrontOrdersService {
     private readonly cartService: CartService,
     private readonly mailService: MailService,
     private readonly eventsGateway: EventsGateway,
+    private readonly notificationService: NotificationService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -584,18 +586,17 @@ export class StorefrontOrdersService {
       .exec();
     if (!doc) throw new NotFoundException('Order not found');
 
-    // Send status update email to customer
-    if (doc.guestEmail) {
+    // Send status update email + SMS to customer
+    if (doc.guestEmail || doc.contactNo) {
       const orderNumber = doc.orderNumber || doc.orderId;
-      this.mailService
-        .sendOrderStatusUpdateEmail(
-          doc.guestEmail,
-          orderNumber,
-          doc.customerName,
-          status,
-          doc.totalPrice,
-        )
-        .catch((err) => this.logger.error(`Failed to send status update email: ${err.message}`));
+      this.notificationService.notifyStatusChange(status, {
+        customerName: doc.customerName,
+        customerEmail: doc.guestEmail,
+        customerPhone: doc.contactNo,
+        orderNumber,
+        status,
+        totalPrice: doc.totalPrice,
+      }).catch((err: any) => this.logger.error(`Failed to send status notification: ${err.message}`));
     }
 
     const docs = await this.orderModel
@@ -662,18 +663,17 @@ export class StorefrontOrdersService {
       )
       .exec();
 
-    // Send status update email to customer
-    if (candidates[0].guestEmail) {
+    // Send status update email + SMS to customer
+    if (candidates[0].guestEmail || candidates[0].contactNo) {
       const orderNumber = candidates[0].orderNumber || candidates[0].orderId;
-      this.mailService
-        .sendOrderStatusUpdateEmail(
-          candidates[0].guestEmail,
-          orderNumber,
-          candidates[0].customerName,
-          body.status,
-          candidates[0].totalPrice,
-        )
-        .catch((err) => this.logger.error(`Failed to send line item status update email: ${err.message}`));
+      this.notificationService.notifyStatusChange(body.status, {
+        customerName: candidates[0].customerName,
+        customerEmail: candidates[0].guestEmail,
+        customerPhone: candidates[0].contactNo,
+        orderNumber,
+        status: body.status,
+        totalPrice: candidates[0].totalPrice,
+      }).catch((err: any) => this.logger.error(`Failed to send line item status notification: ${err.message}`));
     }
 
     const docs = await this.orderModel
@@ -713,6 +713,17 @@ export class StorefrontOrdersService {
         { $set: { status: 'Cancelled', isPurchased: false } },
       )
       .exec();
+
+    // Send cancellation notification
+    this.notificationService.notifyStatusChange('Cancelled', {
+      customerName: doc.customerName,
+      customerEmail: doc.guestEmail,
+      customerPhone: doc.contactNo,
+      orderNumber,
+      status: 'Cancelled',
+      totalPrice: doc.totalPrice,
+    }).catch(() => {});
+
     const docs = await this.orderModel.find({ orderNumber }).exec();
     const grouped = await this.groupDocs(docs);
     return grouped[0];

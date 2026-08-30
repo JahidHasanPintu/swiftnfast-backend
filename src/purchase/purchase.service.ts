@@ -15,6 +15,7 @@ import { CommonPaginationResponse } from 'src/common/interfaces/CommonPagination
 import { removeCurrencySymbols } from 'src/utils/currency.util';
 import { ShipmentService } from 'src/shipment/shipment.service';
 import { PurchaseDocument as ShipmentPurchaseDocument } from 'src/shipment/shipment.types';
+import { NotificationService } from 'src/storefront/notifications/notification.service';
 
 @Injectable()
 export class PurchaseService {
@@ -23,6 +24,7 @@ export class PurchaseService {
     @InjectModel('Orders') private orderModel: Model<OrderDocument>,
     @Inject(forwardRef(() => ShipmentService))
     private shipmentService: ShipmentService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async create(
@@ -506,6 +508,17 @@ export class PurchaseService {
       await this.shipmentService.onPurchaseWeightUpdated(shipmentId.toString());
     }
 
+    // Send weight charged notification
+    if (statusToUpdate === 'Ready To Deliver') {
+      this.notificationService.notifyStatusChange('WEIGHT_CHARGED', {
+        customerName: updatedPurchase.customerName,
+        customerEmail: updatedPurchase.confirmationMail,
+        customerPhone: updatedPurchase.recipientPhone,
+        orderNumber: orderId,
+        status: statusToUpdate,
+      }).catch(() => {});
+    }
+
     return updatedPurchase;
   }
   async updatePurchaseStatus(
@@ -548,6 +561,15 @@ export class PurchaseService {
         updatedPurchase as unknown as ShipmentPurchaseDocument,
       );
     }
+
+    // Send delivered notification
+    this.notificationService.notifyStatusChange('STATUS_FULL_DELIVERED', {
+      customerName: updatedPurchase.customerName,
+      customerEmail: updatedPurchase.confirmationMail,
+      customerPhone: updatedPurchase.recipientPhone,
+      orderNumber: orderId,
+      status: updatePurchaseDto.status,
+    }).catch(() => {});
 
     return updatedPurchase;
   }

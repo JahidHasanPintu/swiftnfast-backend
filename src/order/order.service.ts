@@ -22,6 +22,7 @@ import {
   buildOrderGroupingStages,
   buildDistinctOrderCountStages,
 } from './order.aggregations';
+import { NotificationService } from 'src/storefront/notifications/notification.service';
 
 @Injectable()
 export class OrderService {
@@ -30,6 +31,7 @@ export class OrderService {
     @InjectModel('Orders') private orderModel: Model<OrderDocument>,
     @InjectModel('Payments') private paymentModel: Model<PaymentDocument>,
     @InjectConnection() private readonly connection: Connection,
+    private readonly notificationService: NotificationService,
   ) {}
 
   generateUniqueOrderId(): string {
@@ -313,7 +315,7 @@ export class OrderService {
   ): Promise<OrderDocument> {
     const order = await this.orderModel
       .findOneAndUpdate(
-        { orderId, orderItemIndex }, // Update the query to include orderItemIndex
+        { orderId, orderItemIndex },
         {
           $set: {
             status: newStatus,
@@ -330,17 +332,41 @@ export class OrderService {
       );
     }
 
+    // Send notification
+    this.notificationService.notifyStatusChange(newStatus, {
+      customerName: (order as any).customerName,
+      customerEmail: (order as any).guestEmail,
+      customerPhone: order.contactNo,
+      orderNumber: (order as any).orderNumber || order.orderId,
+      status: newStatus,
+      totalPrice: order.totalPrice,
+    }).catch(() => {});
+
     return order;
   }
 
   // bulk cancel of orders
 
   async updateBulkStatusOrder(orderId: string): Promise<void> {
-    // Update all orders with the given orderId
+    // Fetch all orders before updating so we can notify customers
+    const orders = await this.orderModel.find({ orderId }).exec();
+
     await this.orderModel.updateMany(
       { orderId },
       { status: 'Cancelled', isPurchased: false },
     );
+
+    // Send cancellation notification to each customer
+    for (const order of orders) {
+      this.notificationService.notifyStatusChange('Cancelled', {
+        customerName: (order as any).customerName,
+        customerEmail: (order as any).guestEmail,
+        customerPhone: order.contactNo,
+        orderNumber: (order as any).orderNumber || order.orderId,
+        status: 'Cancelled',
+        totalPrice: order.totalPrice,
+      }).catch(() => {});
+    }
   }
 
   // get customer with order id

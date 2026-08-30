@@ -3,11 +3,13 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { PurchaseDocument } from './interfaces/puchase.interface';
 import axios from 'axios';
+import { NotificationService } from 'src/storefront/notifications/notification.service';
 
 @Injectable()
 export class PathaoService {
   constructor(
     @InjectModel('Purchases') private PurchaseModel: Model<PurchaseDocument>,
+    private readonly notificationService: NotificationService,
   ) {}
 
   private readonly logger = new Logger(PathaoService.name);
@@ -206,6 +208,15 @@ export class PathaoService {
         { new: true },
       );
 
+      // Send shipped notification
+      this.notificationService.notifyStatusChange('STATUS_FULL_SHIPPED', {
+        customerName: purchase.customerName,
+        customerPhone: purchase.recipientPhone,
+        orderNumber: orderId,
+        status: 'Shipped',
+        trackingCode: String(consignment_id),
+      }).catch(() => {});
+
       return {
         success: true,
         consignment_id,
@@ -270,6 +281,15 @@ export class PathaoService {
             },
           },
         );
+
+        // Send shipped notification
+        this.notificationService.notifyStatusChange('STATUS_FULL_SHIPPED', {
+          customerName: purchase.customerName,
+          customerPhone: purchase.recipientPhone,
+          orderNumber: orderId,
+          status: 'Shipped',
+          trackingCode: String(consignment_id),
+        }).catch(() => {});
 
         results.push({ label, success: true, consignment_id, order_id });
       } catch (err: any) {
