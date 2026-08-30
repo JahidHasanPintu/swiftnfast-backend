@@ -7,12 +7,14 @@ import { SearchPurchaseController } from './search-purchase/search-purchase.cont
 import { SearchPurchaseService } from './search-purchase/search-purchase.service';
 import { PathaoService } from './pathao.service';
 import { ShipmentModule } from 'src/shipment/shipment.module';
+import { NotificationModule } from 'src/storefront/notifications/notification.module';
 
 @Module({
   imports: [
     forwardRef(() => ShipmentModule),
     DatabaseModule,
     DatabaseSchemasModule,
+    NotificationModule,
   ],
   controllers: [PurchaseController, SearchPurchaseController],
   providers: [PurchaseService, SearchPurchaseService, PathaoService],

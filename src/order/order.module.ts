@@ -13,9 +13,10 @@ import { CustomerService } from './customer/customer.service';
 import { SearchOrdersController } from './search-orders/search-orders.controller';
 import { SearchOrdersService } from './search-orders/search-orders.service';
 import { InvoiceService } from 'src/invoice/invoice.service';
+import { NotificationModule } from 'src/storefront/notifications/notification.module';
 
 @Module({
-  imports: [DatabaseModule, DatabaseSchemasModule, AuthModule],
+  imports: [DatabaseModule, DatabaseSchemasModule, AuthModule, NotificationModule],
   controllers: [
     OrderController,
     UpdateOrderController,

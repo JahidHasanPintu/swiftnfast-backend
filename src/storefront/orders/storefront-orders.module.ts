@@ -5,6 +5,7 @@ import { StorageModule } from 'src/storage/storage.module';
 import { StorefrontAuthModule } from '../auth/storefront-auth.module';
 import { CartModule } from '../cart/cart.module';
 import { MailModule } from '../mail/mail.module';
+import { NotificationModule } from '../notifications/notification.module';
 import { StorefrontOrdersService } from './storefront-orders.service';
 import { StorefrontOrdersController } from './storefront-orders.controller';
 
@@ -16,6 +17,7 @@ import { StorefrontOrdersController } from './storefront-orders.controller';
     StorefrontAuthModule,
     StorageModule,
     MailModule,
+    NotificationModule,
   ],
   controllers: [StorefrontOrdersController],
   providers: [StorefrontOrdersService],
