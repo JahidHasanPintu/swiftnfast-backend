@@ -67,13 +67,16 @@ export function getStatusLabel(status: string): string {
 
 // ─── Notification Config ───────────────────────────────────────────────────
 
-export const NOTIFICATION_CONFIG: Record<NotificationScenario, NotificationEntry> = {
+export const NOTIFICATION_CONFIG: Record<
+  NotificationScenario,
+  NotificationEntry
+> = {
   // ─── Price Request ─────────────────────────────────────────────────────
   PRICE_UPDATED: {
     email: { enabled: true },
     sms: { enabled: true },
     smsTemplate:
-      'Hi {{customerName}}, the price for your request (Cart #{{cartId}}) has been updated. Please check your email for details. - PFU2',
+      'Your price request has been updated. Check your cart & email for details. - PFU2',
     smsPurpose: 'PRICE',
   },
 
@@ -96,7 +99,7 @@ export const NOTIFICATION_CONFIG: Record<NotificationScenario, NotificationEntry
     email: { enabled: true },
     sms: { enabled: true },
     smsTemplate:
-      'Hi {{customerName}}, your order #{{orderNumber}} has been confirmed. - PFU2',
+      'Your order #{{orderNumber}} has been confirmed. - PFU2',
     smsPurpose: 'ORDER_STATUS',
   },
 
@@ -104,7 +107,7 @@ export const NOTIFICATION_CONFIG: Record<NotificationScenario, NotificationEntry
     email: { enabled: true },
     sms: { enabled: true },
     smsTemplate:
-      'Hi {{customerName}}, your order #{{orderNumber}} is now being processed. - PFU2',
+      'Your order #{{orderNumber}} is now being processed. - PFU2',
     smsPurpose: 'ORDER_STATUS',
   },
 
@@ -112,7 +115,7 @@ export const NOTIFICATION_CONFIG: Record<NotificationScenario, NotificationEntry
     email: { enabled: true },
     sms: { enabled: true },
     smsTemplate:
-      'Hi {{customerName}}, your item in order #{{orderNumber}} has been purchased and is on its way to our warehouse. - PFU2',
+      'Your item in order #{{orderNumber}} has been purchased and is on its way to our warehouse. - PFU2',
     smsPurpose: 'ORDER_STATUS',
   },
 
@@ -120,7 +123,7 @@ export const NOTIFICATION_CONFIG: Record<NotificationScenario, NotificationEntry
     email: { enabled: true },
     sms: { enabled: true },
     smsTemplate:
-      'Hi {{customerName}}, your order #{{orderNumber}} has reached our Bangladesh office and is ready for delivery. - PFU2',
+      'Your order #{{orderNumber}} has reached our Bangladesh office and is ready for delivery. - PFU2',
     smsPurpose: 'ORDER_STATUS',
   },
 
@@ -136,7 +139,7 @@ export const NOTIFICATION_CONFIG: Record<NotificationScenario, NotificationEntry
     email: { enabled: true },
     sms: { enabled: true },
     smsTemplate:
-      'Hi {{customerName}}, your order #{{orderNumber}} has been delivered successfully. Thank you for shopping with PFU2!',
+      'Your order #{{orderNumber}} has been delivered successfully. Thank you for shopping with PFU2!',
     smsPurpose: 'ORDER_STATUS',
   },
 
@@ -144,7 +147,7 @@ export const NOTIFICATION_CONFIG: Record<NotificationScenario, NotificationEntry
     email: { enabled: true },
     sms: { enabled: true },
     smsTemplate:
-      'Hi {{customerName}}, your order #{{orderNumber}} has been cancelled. Please contact support if you have questions. - PFU2',
+      'Your order #{{orderNumber}} has been cancelled. Please contact support if you have questions. - PFU2',
     smsPurpose: 'ORDER_STATUS',
   },
 
@@ -184,7 +187,7 @@ export const NOTIFICATION_CONFIG: Record<NotificationScenario, NotificationEntry
     email: { enabled: true },
     sms: { enabled: true },
     smsTemplate:
-      'Hi {{customerName}}, your items for order #{{orderNumber}} have reached our US warehouse. - PFU2',
+      'Your items for order #{{orderNumber}} have reached our US warehouse. - PFU2',
     smsPurpose: 'ORDER_STATUS',
   },
 
@@ -192,7 +195,7 @@ export const NOTIFICATION_CONFIG: Record<NotificationScenario, NotificationEntry
     email: { enabled: true },
     sms: { enabled: true },
     smsTemplate:
-      'Hi {{customerName}}, your items for order #{{orderNumber}} have reached our Bangladesh office. - PFU2',
+      'Your items for order #{{orderNumber}} have reached our Bangladesh office. - PFU2',
     smsPurpose: 'ORDER_STATUS',
   },
 };
