@@ -77,7 +77,7 @@ export class ClientService {
       throw new Error('JWT_SECRET is not defined');
     }
     return jwt.sign({ userId: user._id, email: user.email }, jwtSecret, {
-      expiresIn: '1h',
+      expiresIn: '30d',
     });
   }
 
