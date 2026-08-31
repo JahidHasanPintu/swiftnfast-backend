@@ -23,32 +23,39 @@ export class SearchOrdersService {
     pageSize = Number(pageSize);
     const skip = (page - 1) * pageSize;
     const normalizedQuery = query.toLowerCase();
+    const regex = new RegExp(normalizedQuery, 'i');
 
-    const searchCriteria: PipelineStage = {
+    const postLookupSearch: PipelineStage = {
       $match: {
         $or: [
-          { customerName: { $regex: normalizedQuery, $options: 'i' } },
-          { orderId: { $regex: normalizedQuery, $options: 'i' } },
-          { productUrl: { $regex: normalizedQuery, $options: 'i' } },
-          { websiteUrl: { $regex: normalizedQuery, $options: 'i' } },
-          { contactNo: { $regex: normalizedQuery, $options: 'i' } },
-          { orderNotes: { $regex: normalizedQuery, $options: 'i' } },
-          { status: { $regex: new RegExp(normalizedQuery, 'i') } },
+          { customerName: { $regex: regex } },
+          { orderId: { $regex: regex } },
+          { productUrl: { $regex: regex } },
+          { websiteUrl: { $regex: regex } },
+          { contactNo: { $regex: regex } },
+          { orderNotes: { $regex: regex } },
+          { status: { $regex: regex } },
+          { 'customer.contactNumber': { $regex: regex } },
+          { 'customer.customerName': { $regex: regex } },
         ],
       },
     };
 
     const [result] = await this.orderModel.aggregate([
-      searchCriteria,
       {
         $facet: {
           data: [
             ...buildOrderGroupingStages(),
+            postLookupSearch,
             { $sort: { orderDate: -1 } },
             { $skip: skip },
             { $limit: pageSize },
           ],
-          totalCount: buildDistinctOrderCountStages(),
+          totalCount: [
+            ...buildOrderGroupingStages(),
+            postLookupSearch,
+            ...buildDistinctOrderCountStages(),
+          ],
         },
       },
     ]);
