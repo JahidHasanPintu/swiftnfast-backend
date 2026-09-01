@@ -50,6 +50,10 @@ export class MailService {
         <p style="color: #999; font-size: 12px; text-align: center; margin-top: 20px;">
           If you did not request this code, please ignore this email.
         </p>
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+        <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">PFU2</p>
+        <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">Contact: 09678-114411 | Email: info@pfu2.com</p>
+        <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">House 56, Road 01, Block A, Niketan, Gulshan - 01, Dhaka - 1212</p>
       </div>`;
 
     try {
@@ -92,6 +96,10 @@ export class MailService {
           <p style="color: #999; font-size: 12px; text-align: center;">
             Cart ID: ${cartId}
           </p>
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+          <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">PFU2</p>
+          <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">Contact: 09678-114411 | Email: info@pfu2.com</p>
+          <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">House 56, Road 01, Block A, Niketan, Gulshan - 01, Dhaka - 1212</p>
         </div>
       </div>`;
 
@@ -171,6 +179,14 @@ export class MailService {
                     <p style="color: #9ca3af; font-size: 12px; margin: 0;">This is an automated email. Please do not reply.</p>
                   </td>
                 </tr>
+                <!-- Contact Footer -->
+                <tr>
+                  <td style="padding: 0 30px 20px 30px; text-align: center; border-top: 1px solid #e5e7eb;">
+                    <p style="color: #9ca3af; font-size: 11px; margin: 15px 0 3px 0;">PFU2</p>
+                    <p style="color: #9ca3af; font-size: 11px; margin: 3px 0;">Contact: 09678-114411 | Email: info@pfu2.com</p>
+                    <p style="color: #9ca3af; font-size: 11px; margin: 3px 0;">House 56, Road 01, Block A, Niketan, Gulshan - 01, Dhaka - 1212</p>
+                  </td>
+                </tr>
               </table>
             </td>
           </tr>
@@ -192,7 +208,7 @@ export class MailService {
   }
 
   async sendPasswordResetEmail(email: string, resetToken: string): Promise<void> {
-    const resetUrl = `${this.clientUrl}/reset-password?token=${resetToken}`;
+    const resetUrl = `${this.clientUrl}/auth/reset-password?token=${resetToken}`;
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 20px;">
         <div style="background: #f8f9fa; border-radius: 8px; padding: 30px;">
@@ -212,6 +228,10 @@ export class MailService {
             If you did not request this, please ignore this email.
           </p>
         </div>
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+        <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">PFU2</p>
+        <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">Contact: 09678-114411 | Email: info@pfu2.com</p>
+        <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">House 56, Road 01, Block A, Niketan, Gulshan - 01, Dhaka - 1212</p>
       </div>`;
 
     try {
@@ -247,6 +267,10 @@ export class MailService {
             You can track your order status in your account.
           </p>
         </div>
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+        <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">PFU2</p>
+        <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">Contact: 09678-114411 | Email: info@pfu2.com</p>
+        <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">House 56, Road 01, Block A, Niketan, Gulshan - 01, Dhaka - 1212</p>
       </div>`;
 
     try {
@@ -355,6 +379,14 @@ export class MailService {
                   <td style="padding: 20px 30px; text-align: center;">
                     <p style="color: #9ca3af; font-size: 12px; margin: 0 0 5px 0;">If you have any questions, please contact our support team.</p>
                     <p style="color: #9ca3af; font-size: 12px; margin: 0;">This is an automated email. Please do not reply.</p>
+                  </td>
+                </tr>
+                <!-- Contact Footer -->
+                <tr>
+                  <td style="padding: 0 30px 20px 30px; text-align: center; border-top: 1px solid #e5e7eb;">
+                    <p style="color: #9ca3af; font-size: 11px; margin: 15px 0 3px 0;">PFU2</p>
+                    <p style="color: #9ca3af; font-size: 11px; margin: 3px 0;">Contact: 09678-114411 | Email: info@pfu2.com</p>
+                    <p style="color: #9ca3af; font-size: 11px; margin: 3px 0;">House 56, Road 01, Block A, Niketan, Gulshan - 01, Dhaka - 1212</p>
                   </td>
                 </tr>
               </table>
