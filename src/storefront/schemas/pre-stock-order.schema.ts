@@ -2,7 +2,7 @@ import * as mongoose from 'mongoose';
 
 const PreStockOrderItemSchema = new mongoose.Schema(
   {
-    productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
+    productId: { type: mongoose.Schema.Types.Mixed },
     prodDesc: { type: String, required: true },
     quantity: { type: Number, required: true, default: 1 },
     uniPrice: { type: Number, required: true, default: 0 },
