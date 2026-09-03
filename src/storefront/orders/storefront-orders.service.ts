@@ -59,6 +59,11 @@ export class StorefrontOrdersService {
     shipping?: any;
     billing?: any;
     paymentMethod?: string;
+    advancePaymentData?: {
+      trxID?: string;
+      amount?: number;
+      paymentID?: string;
+    };
   }) {
     const cart = await this.cartService.getRawCart(body.cartId);
     const rawItems = (cart.items as any[]) || [];
@@ -170,16 +175,53 @@ export class StorefrontOrdersService {
     await this.orderModel.insertMany(lineItems);
 
     const paymentMethod = (body.paymentMethod || 'BKASH').toUpperCase();
+    const advanceAmount = body.advancePaymentData?.amount || 0;
+    const totalAmount = toNumber(cart.totalPrice);
+
+    // If advance payment was made via bKash, update line items with advancePayment
+    if (advanceAmount > 0) {
+      const paidPerItem = advanceAmount / lineItems.length;
+      for (const item of lineItems) {
+        item.advancePayment = Number(paidPerItem.toFixed(2));
+        item.remainingAmount = Number((item.totalPrice - item.advancePayment).toFixed(2));
+      }
+      await this.orderModel.bulkWrite(
+        lineItems.map((item) => ({
+          updateOne: {
+            filter: { orderId: item.orderId, orderItemIndex: item.orderItemIndex },
+            update: {
+              $set: {
+                advancePayment: item.advancePayment,
+                remainingAmount: item.remainingAmount,
+              },
+            },
+          },
+        })),
+      );
+    }
+
+    // Build MFS payment data if advance payment was made via bKash
+    const mfsPayment = body.advancePaymentData?.trxID
+      ? {
+          selectedMFS: paymentMethod.toLowerCase(),
+          mfsTrxId: body.advancePaymentData.trxID,
+          mfsAmount: advanceAmount,
+        }
+      : undefined;
+
     await this.paymentModel.create({
       orderId: orderNumber,
       method: paymentMethod.toLowerCase(),
-      phoneNumber: shippingPhone || '01929918378',
-      transactionStatus: 'pending',
-      statusMessage: 'Awaiting payment confirmation',
-      amount: String(toNumber(cart.totalPrice)),
-      paymentStatus: 'pending',
+      phoneNumber: shippingPhone || '',
+      transactionStatus: body.advancePaymentData?.trxID ? 'Completed' : 'pending',
+      statusMessage: body.advancePaymentData?.trxID ? 'Paid via bKash' : 'Awaiting payment confirmation',
+      amount: String(totalAmount),
+      paymentStatus: body.advancePaymentData?.trxID ? 'paid' : 'pending',
       paymentSource: 'prestock',
       customerId: customer._id,
+      cashPayment: 0,
+      mfsPayment,
+      bankPayment: null,
     });
 
     await this.cartService.deleteById(body.cartId);

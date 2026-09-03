@@ -351,6 +351,11 @@ export class PaymentService {
               shipping: orderData.shipping,
               billing: orderData.billing,
               paymentMethod: orderData.paymentMethod || 'bkash',
+              advancePaymentData: {
+                trxID: data.trxID,
+                amount: paymentRecord?.amount ? parseFloat(paymentRecord.amount) : 0,
+                paymentID: paymentID,
+              },
             });
             orderId = orderResult.orderNumber;
             console.log('[bKash] Order created:', orderId);
@@ -359,14 +364,6 @@ export class PaymentService {
             await this.paymentModel
               .updateOne({ paymentId: paymentID }, { $set: { orderId } })
               .exec();
-
-            // Update the Payments collection with the order link
-            const mongoose = this.paymentModel.db;
-            const PaymentsModel = mongoose.model('Payments');
-            await PaymentsModel.updateOne(
-              { orderId: orderId },
-              { $set: { paymentStatus: 'paid', transactionStatus: 'Completed' } },
-            ).exec();
           } catch (orderError: any) {
             console.error('[bKash] Error creating order from pendingOrderData:', orderError.message);
           }
