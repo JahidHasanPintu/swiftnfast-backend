@@ -242,7 +242,7 @@ export class StorefrontOrdersService {
     const order = await this.findByOrderNumber(orderNumber);
 
     // Emit real-time notification to admin
-    this.eventsGateway.notifyNewPreStockOrder({
+    this.eventsGateway.notifyNewOrder({
       orderNumber,
       customerName: shippingName,
     });
