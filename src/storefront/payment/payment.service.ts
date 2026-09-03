@@ -368,6 +368,9 @@ export class PaymentService {
             await this.paymentModel
               .updateOne({ paymentId: paymentID }, { $set: { orderId } })
               .exec();
+
+            // Send payment success email to customer
+            await this.sendPaymentSuccessEmail(paymentID, orderId);
           } catch (orderError: any) {
             console.error('[bKash] Error creating order from pendingOrderData:', orderError.message);
           }
@@ -694,6 +697,117 @@ export class PaymentService {
       console.log('[bKash] Payment failure email sent to:', customerEmail);
     } catch (error: any) {
       console.error('[bKash] Error sending payment failure email:', error.message);
+    }
+  }
+
+  /**
+   * Send payment success confirmation email to customer after bKash payment succeeds.
+   */
+  private async sendPaymentSuccessEmail(paymentID: string, orderNumber: string) {
+    try {
+      const pfu2Payment = await this.paymentModel.findOne({ paymentId: paymentID }).exec();
+      if (!pfu2Payment) {
+        console.log('[bKash] No payment record found for success email, paymentID:', paymentID);
+        return;
+      }
+
+      const pendingData = pfu2Payment.pendingOrderData;
+      const customerEmail = pendingData?.shipping?.email || pendingData?.billing?.email || '';
+      const customerName = pendingData?.shipping?.name || pendingData?.billing?.name || 'Customer';
+
+      if (!customerEmail) {
+        console.log('[bKash] No email found for success notification');
+        return;
+      }
+
+      console.log('[bKash] Sending payment success email to:', customerEmail);
+
+      const clientUrl = this.clientUrl();
+      const trackUrl = `${clientUrl}/trackorder/${orderNumber}`;
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8"></head>
+        <body style="margin: 0; padding: 0; background-color: #f3f4f6; font-family: Arial, sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f3f4f6; padding: 40px 20px;">
+            <tr>
+              <td align="center">
+                <table width="480" cellpadding="0" cellspacing="0" style="background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                  <tr>
+                    <td style="background: linear-gradient(135deg, #059669, #10b981); padding: 30px; text-align: center;">
+                      <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 700;">PFU2</h1>
+                      <p style="color: #d1fae5; margin: 5px 0 0 0; font-size: 13px;">Payment Successful</p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 30px 30px 0 30px; text-align: center;">
+                      <div style="display: inline-block; background: #ecfdf5; border: 2px solid #10b981; border-radius: 50px; padding: 12px 30px;">
+                        <span style="font-size: 20px; margin-right: 8px;">✓</span>
+                        <span style="color: #059669; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">Payment Confirmed</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 25px 30px;">
+                      <p style="color: #374151; font-size: 16px; margin: 0 0 10px 0;">Dear <strong>${customerName}</strong>,</p>
+                      <p style="color: #6b7280; font-size: 15px; line-height: 1.6; margin: 0 0 20px 0;">
+                        Your payment has been received successfully and your order has been placed.
+                      </p>
+                      <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 15px; margin: 20px 0;">
+                        <p style="margin: 0; color: #065f46; font-size: 14px;"><strong>Order Number:</strong> ${orderNumber}</p>
+                        <p style="margin: 8px 0 0 0; color: #065f46; font-size: 14px;"><strong>Amount Paid:</strong> Tk ${pfu2Payment.amount}</p>
+                        <p style="margin: 8px 0 0 0; color: #065f46; font-size: 14px;"><strong>Transaction ID:</strong> ${pfu2Payment.transactionId || 'N/A'}</p>
+                      </div>
+                      <p style="color: #6b7280; font-size: 15px; line-height: 1.6; margin: 0 0 5px 0;">
+                        You can track your order status anytime from your account.
+                      </p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 0 30px 30px 30px; text-align: center;">
+                      <a href="${trackUrl}" style="display: inline-block; background: #059669; color: #ffffff; padding: 14px 40px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px;">Track My Order</a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 0 30px;">
+                      <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 0;">
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 15px 30px; text-align: center;">
+                      <p style="color: #9ca3af; font-size: 11px; margin: 3px 0;">PFU2</p>
+                      <p style="color: #9ca3af; font-size: 11px; margin: 3px 0;">Contact: 09678-114411 | Email: info@pfu2.com</p>
+                      <p style="color: #9ca3af; font-size: 11px; margin: 3px 0;">House 56, Road 01, Block A, Niketan, Gulshan - 01, Dhaka - 1212</p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+        </html>`;
+
+      const nodemailer = require('nodemailer');
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT || 465),
+        secure: true,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      });
+
+      await transporter.sendMail({
+        from: `PFU2 <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
+        to: customerEmail,
+        subject: `Payment Confirmed - Order ${orderNumber} - PFU2`,
+        html,
+      });
+      console.log('[bKash] Payment success email sent to:', customerEmail);
+    } catch (error: any) {
+      console.error('[bKash] Error sending payment success email:', error.message);
     }
   }
 }

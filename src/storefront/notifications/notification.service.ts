@@ -99,6 +99,16 @@ export class NotificationService {
         );
         return;
       }
+
+      // Order created / payment success email
+      if (scenario === 'ORDER_CREATED' && ctx.orderNumber && ctx.customerEmail && ctx.totalPrice) {
+        await this.mailService.sendOrderConfirmationEmail(
+          ctx.customerEmail,
+          ctx.orderNumber,
+          String(ctx.totalPrice),
+        );
+        return;
+      }
     } catch (err) {
       this.logger.error(
         `Email notification failed [${scenario}] to ${ctx.customerEmail}: ${err.message}`,
