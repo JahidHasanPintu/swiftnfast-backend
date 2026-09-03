@@ -13,6 +13,7 @@ import { MailService } from '../mail/mail.service';
 import { generateImageUrl } from '../utils/image-url.util';
 import { EventsGateway } from '../../common/gateways/events.gateway';
 import { NotificationService } from '../notifications/notification.service';
+import { PreStockOrdersService } from '../pre-stock-orders/pre-stock-orders.service';
 
 const WEIGHT_CHARGES: Record<string, number> = { USA: 500, UK: 400, UAE: 300 };
 const EXCHANGE_RATES: Record<string, number> = { USA: 140, UK: 140, UAE: 30 };
@@ -45,6 +46,7 @@ export class StorefrontOrdersService {
     private readonly mailService: MailService,
     private readonly eventsGateway: EventsGateway,
     private readonly notificationService: NotificationService,
+    private readonly preStockOrdersService: PreStockOrdersService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -68,6 +70,17 @@ export class StorefrontOrdersService {
     const cart = await this.cartService.getRawCart(body.cartId);
     const rawItems = (cart.items as any[]) || [];
 
+    // If cart has outside/URL products, use old Orders collection
+    // If cart has pre-stocked products, use new prestockorders collection
+    const hasOutsideProducts = rawItems.some(
+      (item: any) => item.type === 'outside_order',
+    );
+    if (!hasOutsideProducts && rawItems.length > 0) {
+      // Pre-stocked products → prestockorders collection
+      return this.preStockOrdersService.createOrder(body);
+    }
+
+    // Outside products → old Orders collection
     const orderNumber = this.ordersService.generateStorefrontOrderNumber();
 
     const shipping = body.shipping || cart.shippingAddress || {};
