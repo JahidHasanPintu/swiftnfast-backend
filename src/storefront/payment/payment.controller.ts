@@ -42,6 +42,12 @@ export class PaymentController {
     return { success: true, data: payments };
   }
 
+  @Get('order/:orderId')
+  async getPaymentByOrderId(@Param('orderId') orderId: string) {
+    const payment = await this.paymentService.getPaymentByOrderId(orderId);
+    return { success: true, data: payment };
+  }
+
   @Post('bkash/create-payment')
   async createBkashPayment(@Body() body: any) {
     console.log('[Payment Controller] POST /bkash/create-payment');

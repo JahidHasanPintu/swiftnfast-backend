@@ -35,6 +35,10 @@ export class PaymentService {
     return this.sanitize(payment);
   }
 
+  async getPaymentByOrderId(orderId: string) {
+    return this.paymentModel.findOne({ orderId }).lean().exec();
+  }
+
   async getAllPayments() {
     const payments = await this.paymentModel
       .find()

@@ -54,6 +54,7 @@ export class PreStockOrdersController {
   }
 
   @Get('number/:orderNumber')
+  @UseGuards(JwtAuthGuard)
   async findByOrderNumber(@Param('orderNumber') orderNumber: string) {
     const data = await this.ordersService.findByOrderNumber(orderNumber);
     return { success: true, data };
