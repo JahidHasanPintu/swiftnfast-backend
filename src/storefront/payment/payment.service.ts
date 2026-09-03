@@ -7,7 +7,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import axios from 'axios';
 import { SettingsService } from '../settings/settings.service';
-import { PreStockOrdersService } from '../pre-stock-orders/pre-stock-orders.service';
+import { StorefrontOrdersService } from '../orders/storefront-orders.service';
 
 
 
@@ -16,7 +16,7 @@ export class PaymentService {
   constructor(
     @InjectModel('Pfu2Payment') private readonly paymentModel: Model<any>,
     private readonly settingsService: SettingsService,
-    private readonly preStockOrdersService: PreStockOrdersService,
+    private readonly storefrontOrdersService: StorefrontOrdersService,
   ) {}
 
   async createPayment(data: any, file?: any) {
@@ -346,7 +346,7 @@ export class PaymentService {
           try {
             console.log('[bKash] Creating order from pendingOrderData...');
             const orderData = paymentRecord.pendingOrderData;
-            const orderResult = await this.preStockOrdersService.createOrder({
+            const orderResult = await this.storefrontOrdersService.createPreStockOrder({
               userId: orderData.userId,
               guestEmail: orderData.guestEmail,
               guestContact: orderData.guestContact,
