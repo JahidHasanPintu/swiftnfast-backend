@@ -22,6 +22,7 @@ import {
 } from '../auth/storefront-auth.guards';
 import { StorefrontRequest } from '../auth/storefront-request.interface';
 import { StorefrontOrdersService } from './storefront-orders.service';
+import { PreStockOrdersService } from '../pre-stock-orders/pre-stock-orders.service';
 
 @Public()
 @Controller('api/v1')
@@ -29,13 +30,14 @@ export class StorefrontOrdersController {
   constructor(
     private readonly ordersService: StorefrontOrdersService,
     private readonly storageService: StorageService,
+    private readonly preStockOrdersService: PreStockOrdersService,
   ) {}
 
   // ---- Pre-stock orders --------------------------------------------------
   @Post('orders')
   @UseGuards(StorefrontOptionalAuthGuard)
   async create(@Req() req: StorefrontRequest, @Body() body: any) {
-    const order = await this.ordersService.createPreStockOrder({
+    const order = await this.preStockOrdersService.createOrder({
       userId: req.user?.userId,
       ...body,
     });
@@ -108,7 +110,7 @@ export class StorefrontOrdersController {
   @Get('orders/prestock-pending-count')
   @UseGuards(JwtAuthGuard)
   async getPendingPreStockOrderCount() {
-    const count = await this.ordersService.getPendingPreStockOrderCount();
+    const count = await this.preStockOrdersService.getPendingCount();
     return { success: true, data: { count } };
   }
 

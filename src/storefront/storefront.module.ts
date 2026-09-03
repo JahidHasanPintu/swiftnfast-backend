@@ -12,6 +12,7 @@ import { AddressModule } from './addresses/address.module';
 import { PaymentModule } from './payment/payment.module';
 import { PaymentMethodModule } from './payment-methods/payment-method.module';
 import { StorefrontOrdersModule } from './orders/storefront-orders.module';
+import { PreStockOrdersModule } from './pre-stock-orders/pre-stock-orders.module';
 import { AdminModule } from './admin/admin.module';
 import { MailModule } from './mail/mail.module';
 import { SmsModule } from './sms/sms.module';
@@ -32,6 +33,7 @@ import { NotificationModule } from './notifications/notification.module';
     PaymentModule,
     PaymentMethodModule,
     StorefrontOrdersModule,
+    PreStockOrdersModule,
     AdminModule,
     MailModule,
     SmsModule,
