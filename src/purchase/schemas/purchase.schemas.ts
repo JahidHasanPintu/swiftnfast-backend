@@ -10,7 +10,7 @@ export const PurchaseSchema = new mongoose.Schema(
     buyingUP: { type: String, required: true },
     buyingBDT: { type: String, required: true },
     advance: { type: String, required: true },
-    grossProfit: { type: String, required: true },
+    grossProfit: { type: String, default: '' },
     purchaseDate: { type: Date, required: true },
     note: { type: String },
 
