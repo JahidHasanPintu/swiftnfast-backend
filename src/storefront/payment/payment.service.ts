@@ -7,14 +7,16 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import axios from 'axios';
 import { SettingsService } from '../settings/settings.service';
+import { StorefrontOrdersService } from '../orders/storefront-orders.service';
 
-const DEFAULT_PHONE = '01929918378';
+
 
 @Injectable()
 export class PaymentService {
   constructor(
     @InjectModel('Pfu2Payment') private readonly paymentModel: Model<any>,
     private readonly settingsService: SettingsService,
+    private readonly storefrontOrdersService: StorefrontOrdersService,
   ) {}
 
   async createPayment(data: any, file?: any) {
@@ -136,7 +138,7 @@ export class PaymentService {
     const invoiceNumber = 'INVPFU2-' + Date.now();
     const paymentData = {
       mode: '0011',
-      payerReference: body.phone || DEFAULT_PHONE,
+      payerReference: body.phone || '01700000000',
       callbackURL: `${process.env.BACKEND_URL}/api/v1/payment/bkash/callback`,
       merchantAssociationInfo: 'MI05MID54RF09123456One',
       amount: body.amount,
@@ -183,12 +185,13 @@ export class PaymentService {
 
         await this.paymentModel.create({
           method: 'bkash',
-          phoneNumber: body.phone || DEFAULT_PHONE,
+          phoneNumber: body.phone || '01700000000',
           paymentId: paymentID,
           orderId: body.orderId ?? null,
           transactionStatus: 'initiated',
           statusMessage: 'Awaiting bKash execution',
           amount: body.amount,
+          pendingOrderData: body.pendingOrderData ?? null,
         });
         console.log('[bKash] Payment record saved to Pfu2Payment collection');
 
@@ -329,12 +332,55 @@ export class PaymentService {
         await this.sendPaymentFailureEmail(paymentID, data.transactionStatus || 'failed');
       }
 
-      // Get orderId from Pfu2Payment record to include in redirect
-      const paymentRecord = await this.paymentModel.findOne({ paymentId: paymentID }).exec();
-      const orderId = paymentRecord?.orderId || '';
+      // Create order after successful payment (payment-first flow)
+      let orderId = '';
+      let paymentAmount = '';
+      if (completed) {
+        const paymentRecord = await this.paymentModel.findOne({ paymentId: paymentID }).exec();
+        paymentAmount = paymentRecord?.amount || '';
+        if (paymentRecord?.pendingOrderData) {
+          try {
+            console.log('[bKash] Creating order from pendingOrderData...');
+            const orderData = paymentRecord.pendingOrderData;
+            const orderResult = await this.storefrontOrdersService.createPreStockOrder({
+              userId: orderData.userId,
+              guestEmail: orderData.guestEmail,
+              guestContact: orderData.guestContact,
+              isGuest: orderData.isGuest,
+              cartId: orderData.cartId,
+              shipping: orderData.shipping,
+              billing: orderData.billing,
+              paymentMethod: orderData.paymentMethod || 'bkash',
+            });
+            orderId = orderResult.orderNumber;
+            console.log('[bKash] Order created:', orderId);
+
+            // Link payment to the created order
+            await this.paymentModel
+              .updateOne({ paymentId: paymentID }, { $set: { orderId } })
+              .exec();
+
+            // Update the Payments collection with the order link
+            const mongoose = this.paymentModel.db;
+            const PaymentsModel = mongoose.model('Payments');
+            await PaymentsModel.updateOne(
+              { orderId: orderId },
+              { $set: { paymentStatus: 'paid', transactionStatus: 'Completed' } },
+            ).exec();
+          } catch (orderError: any) {
+            console.error('[bKash] Error creating order from pendingOrderData:', orderError.message);
+          }
+        } else {
+          orderId = paymentRecord?.orderId || '';
+        }
+      } else {
+        const paymentRecord = await this.paymentModel.findOne({ paymentId: paymentID }).exec();
+        orderId = paymentRecord?.orderId || '';
+        paymentAmount = paymentRecord?.amount || '';
+      }
 
       return completed
-        ? `${this.clientUrl()}/payment-success?paymentID=${paymentID}&trxID=${data.trxID || ''}&amount=${paymentRecord?.amount || ''}&orderId=${orderId}`
+        ? `${this.clientUrl()}/payment-success?paymentID=${paymentID}&trxID=${data.trxID || ''}&amount=${paymentAmount}&orderId=${orderId}`
         : `${this.clientUrl()}/payment-failed?reason=${encodeURIComponent(
             data.statusMessage,
           )}&paymentID=${paymentID}&orderId=${orderId}`;

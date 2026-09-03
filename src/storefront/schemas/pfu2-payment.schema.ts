@@ -24,6 +24,7 @@ export const Pfu2PaymentSchema = new mongoose.Schema(
       default: 'pending',
     },
     paymentSource: { type: String },
+    pendingOrderData: { type: mongoose.Schema.Types.Mixed, default: null },
   },
   { timestamps: true, collection: 'payments' },
 );
