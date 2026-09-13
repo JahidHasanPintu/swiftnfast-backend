@@ -86,6 +86,7 @@ export class PreStockOrdersService {
         productImageUrl: item.ssImageUrl || undefined,
         productSourcedFrom: item.productSourcedFrom,
         orderNotes: item.notes,
+        couponCode: item.promoCode,
       };
     });
 

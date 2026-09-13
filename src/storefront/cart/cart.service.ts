@@ -99,6 +99,7 @@ export class CartService {
             color: item.color,
             size: item.size,
             notes: item.notes,
+            promoCode: item.promoCode,
             approximatePrice: item.approximatePrice,
             totalEstimatedPrice: item.totalEstimatedPrice,
             status: item.status,
@@ -234,6 +235,7 @@ export class CartService {
       color?: string;
       size?: string;
       notes?: string;
+      promoCode?: string;
       approximatePrice?: number;
       totalEstimatedPrice?: number;
     },
@@ -262,6 +264,7 @@ export class CartService {
     if (idx >= 0) {
       items[idx].quantity = Number(items[idx].quantity) + qty;
       items[idx].price = price;
+      if (body.promoCode) items[idx].promoCode = body.promoCode;
     } else {
       const item: any = {
         productId: body.productId,
@@ -276,6 +279,7 @@ export class CartService {
         item.color = body.color;
         item.size = body.size;
         item.notes = body.notes;
+        item.promoCode = body.promoCode;
         item.approximatePrice = body.approximatePrice;
         item.totalEstimatedPrice = body.totalEstimatedPrice;
       }
@@ -415,7 +419,44 @@ export class CartService {
     const cart = await this.cartModel.findById(id).exec();
     if (!cart) return null;
     cart.isRequested = body.isRequested === true;
+    if (body.isRequested === true) {
+      cart.requestedAt = new Date();
+    }
     if (body.guestContact !== undefined) cart.guestContact = body.guestContact;
+    await cart.save();
+    return this.enrich(cart);
+  }
+
+  async setItemStatus(
+    id: string,
+    body: {
+      productId: string;
+      type?: string;
+      status?: string;
+      reason?: string;
+    },
+  ) {
+    const cart = await this.cartModel.findById(id).exec();
+    if (!cart) throw new NotFoundException('Cart not found');
+    const type = body.type || 'product';
+    const items = parseItems(cart.items) as any[];
+    const idx = items.findIndex(
+      (it: any) =>
+        String(it.productId) === String(body.productId) &&
+        (it.type || 'product') === type,
+    );
+    if (idx < 0) throw new NotFoundException('Cart item not found');
+
+    const status = (body.status || 'PENDING').toUpperCase();
+    const allowed = ['PENDING', 'HOLD', 'CANCELLED'];
+    if (!allowed.includes(status))
+      throw new BadRequestException(
+        `Invalid status. Allowed: ${allowed.join(', ')}`,
+      );
+    items[idx].adminStatus = status as any;
+    if (body.reason !== undefined) items[idx].adminReason = body.reason;
+    if (status === 'PENDING') items[idx].adminReason = undefined;
+    cart.items = items;
     await cart.save();
     return this.enrich(cart);
   }
@@ -521,7 +562,7 @@ export class CartService {
     const filter: Record<string, any> = { isRequested: true };
     if (query.userId) filter.userId = query.userId;
 
-    const sort: Record<string, any> = { createdAt: -1 };
+    const sort: Record<string, any> = { requestedAt: -1 };
     if (query.sort) {
       const [field, direction] = String(query.sort).split(':');
       if (field) sort[field] = direction === 'asc' ? 1 : -1;

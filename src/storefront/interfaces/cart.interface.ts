@@ -16,9 +16,12 @@ export interface CartItem {
   color?: string;
   size?: string;
   notes?: string;
+  promoCode?: string;
   approximatePrice?: number;
   totalEstimatedPrice?: number;
   status?: string;
+  adminStatus?: 'PENDING' | 'HOLD' | 'CANCELLED';
+  adminReason?: string;
 }
 
 export interface Cart {
@@ -27,6 +30,7 @@ export interface Cart {
   guestContact?: string;
   isRequested?: boolean;
   isRead?: boolean;
+  requestedAt?: Date;
   items: CartItem[];
   itemPrice?: number;
   tax?: number;

@@ -163,6 +163,7 @@ export class StorefrontOrdersService {
         remainingAmount: undefined,
         orderNotes: item.notes,
         origin: productSourcedFrom || 'Bangladesh',
+        couponCode: item.promoCode,
         ssImageUrl: item.ssImageUrl,
         status: 'PENDING',
         userId,

@@ -129,6 +129,17 @@ export class CartController {
     };
   }
 
+  @Patch('cart/:id/item-status')
+  @UseGuards(JwtAuthGuard)
+  async updateItemStatus(@Param('id') id: string, @Body() body: any) {
+    const data = await this.cartService.setItemStatus(id, body);
+    return {
+      success: true,
+      message: 'Cart item status updated successfully',
+      data,
+    };
+  }
+
   // ---- Customer-facing cart (storefront token / guest token) --------------
 
   @Get('mycart')

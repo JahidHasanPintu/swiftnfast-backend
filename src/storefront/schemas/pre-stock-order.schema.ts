@@ -15,6 +15,7 @@ const PreStockOrderItemSchema = new mongoose.Schema(
     productImageUrl: { type: String },
     productSourcedFrom: { type: String },
     orderNotes: { type: String },
+    couponCode: { type: String },
   },
   { _id: true },
 );
