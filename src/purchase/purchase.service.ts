@@ -465,11 +465,12 @@ export class PurchaseService {
     // Construct the query and update objects
     const query = { orderId, orderItemIndex };
 
+    const weightCharge = updatePurchaseDto.productWeightCharge
+      ? Math.ceil(updatePurchaseDto.productWeightCharge)
+      : updatePurchaseDto.productWeightCharge;
+
     let statusToUpdate = 'Purchased';
-    if (
-      updatePurchaseDto.productWeightCharge &&
-      updatePurchaseDto.productWeightCharge > 0
-    ) {
+    if (weightCharge && weightCharge > 0) {
       statusToUpdate = 'Ready To Deliver';
     }
 
@@ -477,7 +478,7 @@ export class PurchaseService {
     const setFields: Record<string, any> = {
       productWeight: updatePurchaseDto.productWeight,
       weightChargePerKg: updatePurchaseDto.weightChargePerKg,
-      productWeightCharge: updatePurchaseDto.productWeightCharge,
+      productWeightCharge: weightCharge,
       remaniningDue: updatePurchaseDto.remaniningDue,
       status: statusToUpdate,
     };
