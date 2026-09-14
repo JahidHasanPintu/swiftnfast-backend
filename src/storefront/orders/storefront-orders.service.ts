@@ -228,7 +228,7 @@ export class StorefrontOrdersService {
       method: paymentMethod.toLowerCase(),
       phoneNumber: shippingPhone || '',
       transactionStatus: body.advancePaymentData?.trxID ? 'Completed' : 'pending',
-      statusMessage: body.advancePaymentData?.trxID ? 'Paid via bKash' : 'Awaiting payment confirmation',
+      statusMessage: body.advancePaymentData?.trxID ? 'Paid via online payment' : 'Awaiting payment confirmation',
       amount: String(totalAmount),
       paymentStatus: body.advancePaymentData?.trxID ? 'paid' : 'pending',
       paymentSource: 'prestock',

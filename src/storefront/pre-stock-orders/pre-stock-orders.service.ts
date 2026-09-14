@@ -144,7 +144,7 @@ export class PreStockOrdersService {
       method: paymentMethod,
       phoneNumber: shippingPhone || '',
       transactionStatus: body.advancePaymentData?.trxID ? 'Completed' : 'pending',
-      statusMessage: body.advancePaymentData?.trxID ? 'Paid via bKash' : 'Awaiting payment confirmation',
+      statusMessage: body.advancePaymentData?.trxID ? 'Paid via online payment' : 'Awaiting payment confirmation',
       amount: String(grandTotal),
       paymentStatus: advanceAmount > 0 ? 'paid' : 'pending',
       paymentSource: 'prestock',
