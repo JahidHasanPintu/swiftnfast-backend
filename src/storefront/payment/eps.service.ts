@@ -154,12 +154,10 @@ export class EpsService {
 
   private async clearCachedToken() {
     try {
-      await this.settingsService.upsert('eps_token', '', 'Expired EPS token');
-      await this.settingsService.upsert(
-        'eps_token_expiry',
-        '',
-        'Expired EPS token',
-      );
+      await Promise.all([
+        this.settingsService.remove('eps_token'),
+        this.settingsService.remove('eps_token_expiry'),
+      ]);
     } catch (e) {
       console.error('[EPS] Error clearing cached token:', e);
     }

@@ -48,4 +48,8 @@ export class SettingsService {
       updated_at: now,
     });
   }
+
+  async remove(key: string) {
+    return this.settingModel.deleteOne({ key }).exec();
+  }
 }
