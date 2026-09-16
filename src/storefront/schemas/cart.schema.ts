@@ -22,6 +22,8 @@ export const CartItemSchema = new mongoose.Schema(
     size: { type: String },
     notes: { type: String },
     promoCode: { type: String },
+    category: { type: String },
+    variant: { type: String },
     approximatePrice: { type: Number },
     totalEstimatedPrice: { type: Number },
     status: { type: String },

@@ -17,6 +17,8 @@ export interface CartItem {
   size?: string;
   notes?: string;
   promoCode?: string;
+  category?: string;
+  variant?: string;
   approximatePrice?: number;
   totalEstimatedPrice?: number;
   status?: string;

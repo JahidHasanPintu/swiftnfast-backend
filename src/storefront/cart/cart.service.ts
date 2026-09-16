@@ -87,9 +87,11 @@ export class CartService {
             price: item.price,
             shortDescription:
               item.productSourcedFrom != null
-                ? `${item.productSourcedFrom} sourced product${
+                ? `${item.category ? `${item.category} - ` : ''}${
+                    item.productSourcedFrom
+                  } sourced product${
                     item.color ? ` - ${item.color}` : ''
-                  }${item.size ? ` - ${item.size}` : ''}`
+                  }${item.size ? ` - ${item.size}` : ''}${item.variant ? ` - ${item.variant}` : ''}`
                 : undefined,
             discountPrice: '0.00',
             images: [],
@@ -100,6 +102,8 @@ export class CartService {
             size: item.size,
             notes: item.notes,
             promoCode: item.promoCode,
+            category: item.category,
+            variant: item.variant,
             approximatePrice: item.approximatePrice,
             totalEstimatedPrice: item.totalEstimatedPrice,
             status: item.status,
@@ -236,6 +240,8 @@ export class CartService {
       size?: string;
       notes?: string;
       promoCode?: string;
+      category?: string;
+      variant?: string;
       approximatePrice?: number;
       totalEstimatedPrice?: number;
     },
@@ -280,6 +286,8 @@ export class CartService {
         item.size = body.size;
         item.notes = body.notes;
         item.promoCode = body.promoCode;
+        item.category = body.category;
+        item.variant = body.variant;
         item.approximatePrice = body.approximatePrice;
         item.totalEstimatedPrice = body.totalEstimatedPrice;
       }
