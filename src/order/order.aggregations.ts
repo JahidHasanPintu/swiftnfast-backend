@@ -16,6 +16,7 @@ export function buildOrderGroupingStages(): PipelineStage.FacetPipelineStage[] {
         orders: { $push: '$$ROOT' },
         latestOrder: { $first: '$$ROOT' },
         totalOrderPrice: { $sum: '$totalPrice' },
+        totalOrderAdvance: { $sum: { $ifNull: ['$advancePayment', 0] } },
       },
     },
     {
@@ -109,8 +110,11 @@ export function buildOrderGroupingStages(): PipelineStage.FacetPipelineStage[] {
           uniPrice: '$latestOrder.uniPrice',
           totalPrice: '$latestOrder.totalPrice',
           grandTotal: '$totalOrderPrice',
-          advancePayment: '$latestOrder.advancePayment',
-          remainingAmount: '$latestOrder.remainingAmount',
+          advancePayment: '$totalOrderAdvance',
+          remainingAmount: {
+            $subtract: ['$totalOrderPrice', '$totalOrderAdvance'],
+          },
+          totalAdvance: '$totalOrderAdvance',
           orderNotes: '$latestOrder.orderNotes',
           websiteUrl: '$latestOrder.websiteUrl',
           status: '$calculatedStatus',
