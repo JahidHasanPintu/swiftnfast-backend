@@ -24,6 +24,8 @@ export interface CartItem {
   status?: string;
   adminStatus?: 'PENDING' | 'HOLD' | 'CANCELLED';
   adminReason?: string;
+  usaSalesTax?: number;
+  shippingCost?: number;
 }
 
 export interface Cart {
@@ -39,6 +41,7 @@ export interface Cart {
   pfu2Charge?: number;
   discount?: number;
   totalPrice?: number;
+  updatedBy?: string;
   shippingAddress?: any;
   billingAddress?: any;
   createdAt?: Date;

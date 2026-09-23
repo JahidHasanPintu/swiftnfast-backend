@@ -27,12 +27,7 @@ function toFixed2(n: number): number {
   return Number((Math.round(n * 100) / 100).toFixed(2));
 }
 
-function calculateCartTotals(
-  items: any[],
-  pfu2Charge = 1000,
-  discount = 0,
-  taxPct = 0,
-) {
+function calculateCartTotals(items: any[], discount = 0, taxPct = 0) {
   const itemPrice = toFixed2(
     items.reduce(
       (acc, it) => acc + (Number(it.price) || 0) * (Number(it.quantity) || 0),
@@ -40,7 +35,7 @@ function calculateCartTotals(
     ),
   );
   const tax = toFixed2(itemPrice * (taxPct / 100));
-  const totalPrice = toFixed2(itemPrice + tax + pfu2Charge - discount);
+  const totalPrice = toFixed2(itemPrice + tax - discount);
   return { itemPrice, tax, totalPrice };
 }
 
@@ -89,9 +84,9 @@ export class CartService {
               item.productSourcedFrom != null
                 ? `${item.category ? `${item.category} - ` : ''}${
                     item.productSourcedFrom
-                  } sourced product${
-                    item.color ? ` - ${item.color}` : ''
-                  }${item.size ? ` - ${item.size}` : ''}${item.variant ? ` - ${item.variant}` : ''}`
+                  } sourced product${item.color ? ` - ${item.color}` : ''}${
+                    item.size ? ` - ${item.size}` : ''
+                  }${item.variant ? ` - ${item.variant}` : ''}`
                 : undefined,
             discountPrice: '0.00',
             images: [],
@@ -169,7 +164,7 @@ export class CartService {
           items: [],
           itemPrice: 0,
           tax: 0,
-          pfu2Charge: 1000,
+          pfu2Charge: 0,
           discount: 0,
           totalPrice: 0,
         });
@@ -187,7 +182,7 @@ export class CartService {
           items: [],
           itemPrice: 0,
           tax: 0,
-          pfu2Charge: 1000,
+          pfu2Charge: 0,
           discount: 0,
           totalPrice: 0,
         });
@@ -294,12 +289,7 @@ export class CartService {
       items.push(item);
     }
 
-    const totals = calculateCartTotals(
-      items,
-      cart.pfu2Charge,
-      cart.discount,
-      0,
-    );
+    const totals = calculateCartTotals(items, cart.discount);
     cart.items = items;
     cart.itemPrice = totals.itemPrice;
     cart.tax = totals.tax;
@@ -317,6 +307,9 @@ export class CartService {
       price?: number;
       finalPrice?: number;
       type?: string;
+      usaSalesTax?: number;
+      shippingCost?: number;
+      updatedBy?: string;
     },
   ) {
     const cart = await this.cartModel.findById(id).exec();
@@ -340,6 +333,15 @@ export class CartService {
       items[idx].finalPrice = toFixed2(Number(body.finalPrice));
       items[idx].priceManuallyUpdated = true;
     }
+    if (body.usaSalesTax !== undefined) {
+      items[idx].usaSalesTax = toFixed2(Number(body.usaSalesTax));
+    }
+    if (body.shippingCost !== undefined) {
+      items[idx].shippingCost = toFixed2(Number(body.shippingCost));
+    }
+    if (body.updatedBy) {
+      cart.updatedBy = body.updatedBy;
+    }
     if (body.quantity !== undefined) {
       const q = Number(body.quantity);
       if (q <= 0) {
@@ -349,12 +351,7 @@ export class CartService {
       }
     }
 
-    const totals = calculateCartTotals(
-      items,
-      cart.pfu2Charge,
-      cart.discount,
-      0,
-    );
+    const totals = calculateCartTotals(items, cart.discount);
     cart.items = items;
     cart.itemPrice = totals.itemPrice;
     cart.tax = totals.tax;
@@ -384,12 +381,7 @@ export class CartService {
     if (next < 1)
       throw new BadRequestException('Quantity cannot be less than 1');
     items[idx].quantity = next;
-    const totals = calculateCartTotals(
-      items,
-      cart.pfu2Charge,
-      cart.discount,
-      0,
-    );
+    const totals = calculateCartTotals(items, cart.discount);
     cart.items = items;
     cart.itemPrice = totals.itemPrice;
     cart.tax = totals.tax;
@@ -479,12 +471,7 @@ export class CartService {
           (it.type || 'product') === (productType || 'product')
         ),
     );
-    const totals = calculateCartTotals(
-      items,
-      cart.pfu2Charge,
-      cart.discount,
-      0,
-    );
+    const totals = calculateCartTotals(items, cart.discount);
     cart.items = items;
     cart.itemPrice = totals.itemPrice;
     cart.tax = totals.tax;
@@ -549,12 +536,7 @@ export class CartService {
         userItems.push(gItem);
       }
     }
-    const totals = calculateCartTotals(
-      userItems,
-      userCart.pfu2Charge,
-      userCart.discount,
-      0,
-    );
+    const totals = calculateCartTotals(userItems, userCart.discount);
     userCart.items = userItems;
     userCart.itemPrice = totals.itemPrice;
     userCart.tax = totals.tax;

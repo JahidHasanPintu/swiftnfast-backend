@@ -33,6 +33,8 @@ export const CartItemSchema = new mongoose.Schema(
       default: 'PENDING',
     },
     adminReason: { type: String },
+    usaSalesTax: { type: Number, default: 0 },
+    shippingCost: { type: Number, default: 0 },
   },
   { _id: false },
 );
@@ -48,9 +50,10 @@ export const CartSchema = new mongoose.Schema(
     items: { type: [CartItemSchema], default: [] },
     itemPrice: { type: Number, default: 0 },
     tax: { type: Number, default: 0 },
-    pfu2Charge: { type: Number, default: 1000 },
+    pfu2Charge: { type: Number, default: 0 },
     discount: { type: Number, default: 0 },
     totalPrice: { type: Number, default: 0 },
+    updatedBy: { type: String },
   },
   { timestamps: true },
 );
