@@ -14,9 +14,16 @@ import { generateImageUrl } from '../utils/image-url.util';
 import { EventsGateway } from '../../common/gateways/events.gateway';
 import { NotificationService } from '../notifications/notification.service';
 import { PreStockOrdersService } from '../pre-stock-orders/pre-stock-orders.service';
+import { SettingsService } from '../settings/settings.service';
 
 const WEIGHT_CHARGES: Record<string, number> = { USA: 500, UK: 400, UAE: 300 };
 const EXCHANGE_RATES: Record<string, number> = { USA: 140, UK: 140, UAE: 30 };
+// Setting keys mirror the frontend settingsStore.getRate lookups
+const RATE_SETTING_KEYS: Record<string, string> = {
+  USA: 'usd_rate',
+  UK: 'gbp_rate',
+  UAE: 'aed_rate',
+};
 const OUTSIDE_TO_IMPORT: Record<string, string> = {
   DRAFT: 'Pending',
   SUBMITTED: 'Pending',
@@ -30,6 +37,10 @@ const OUTSIDE_TO_IMPORT: Record<string, string> = {
 function toNumber(v: any): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
+}
+
+function toFixed2(n: number): number {
+  return Number(n.toFixed(2));
 }
 
 @Injectable()
@@ -47,7 +58,28 @@ export class StorefrontOrdersService {
     private readonly eventsGateway: EventsGateway,
     private readonly notificationService: NotificationService,
     private readonly preStockOrdersService: PreStockOrdersService,
+    private readonly settingsService: SettingsService,
   ) {}
+
+  // Exchange rate for a country, preferring the admin-managed Settings value
+  // (same keys the storefront settingsStore uses) and falling back to fixed rates.
+  private async getExchangeRate(source: string): Promise<number> {
+    const key = RATE_SETTING_KEYS[source || ''] || '';
+    if (!key) return 1;
+    let setting: any = null;
+    try {
+      setting = await this.settingsService.getByKey(key);
+    } catch {
+      setting = null;
+    }
+    const val = setting?.value != null ? parseFloat(String(setting.value)) : NaN;
+    if (!Number.isFinite(val) || val <= 0) {
+      // Match the frontend settingsStore.getRate default (1) so stored totals
+      // align with what the customer saw/paid at checkout.
+      return 1;
+    }
+    return val;
+  }
 
   // -------------------------------------------------------------------------
   // Pre-stock checkout: cart -> unified order line items (orderType:'prestock')
@@ -107,11 +139,38 @@ export class StorefrontOrdersService {
         : undefined;
 
     const lineItems = [];
+    const ratesCache: Record<string, number> = {};
+    let orderGrandTotal = 0;
     for (let i = 0; i < rawItems.length; i++) {
       const item = rawItems[i];
       const type = item.type || 'product';
       const qty = toNumber(item.quantity) || 1;
       const uni = toNumber(item.price);
+      const isOutside = type === 'outside_order';
+      const source = item.productSourcedFrom || '';
+
+      if (!(source in ratesCache)) {
+        ratesCache[source] = await this.getExchangeRate(source);
+      }
+      const rate = ratesCache[source];
+
+      // Per-line BDT math mirroring the checkout page: per-unit = finalPrice
+      // (manual override) or source price × 1.1 × rate; tax/shipping converted
+      // the same way for outside orders only; all scaled by quantity.
+      let unitBdt = uni;
+      if (isOutside) {
+        unitBdt =
+          item.priceManuallyUpdated &&
+          item.finalPrice != null &&
+          toNumber(item.finalPrice) > 0
+            ? toNumber(item.finalPrice)
+            : uni * 1.1 * rate;
+      }
+      const bdtFactor = isOutside ? 1.1 * rate : 1;
+      const taxBdt = toNumber(item.usaSalesTax) * bdtFactor;
+      const shippingBdt = toNumber(item.shippingCost) * bdtFactor;
+      const lineTotal = toFixed2((unitBdt + taxBdt + shippingBdt) * qty);
+      orderGrandTotal += lineTotal;
 
       let productId;
       let prodDesc = item.name;
@@ -157,10 +216,9 @@ export class StorefrontOrdersService {
         color,
         size,
         uniPrice: uni,
-        totalPrice:
-          item.finalPrice != null ? toNumber(item.finalPrice) : uni * qty,
-        advancePayment: undefined,
-        remainingAmount: undefined,
+        totalPrice: lineTotal,
+        advancePayment: 0,
+        remainingAmount: lineTotal,
         orderNotes: item.notes,
         origin: productSourcedFrom || 'Bangladesh',
         couponCode: item.promoCode,
@@ -171,16 +229,20 @@ export class StorefrontOrdersService {
         guestEmail: body.guestEmail || shippingEmail,
         guestContact: body.guestContact || shippingPhone,
         isPurchased: false,
-        itemPrice: toNumber(cart.itemPrice),
-        tax: toNumber(cart.tax),
-        pfu2Charge: toNumber(cart.pfu2Charge),
+        itemPrice: toFixed2(unitBdt),
+        tax: toFixed2(taxBdt * qty),
+        shippingCostBdt: toFixed2(shippingBdt * qty),
+        pfu2Charge: 0,
         discount: toNumber(cart.discount),
-        grandTotal: toNumber(cart.totalPrice),
+        grandTotal: 0,
         shippingAddress: shipping,
         billingAddress: body.billing || cart.billingAddress || {},
         paymentMethod: body.paymentMethod || 'BKASH',
       });
     }
+
+    orderGrandTotal = toFixed2(orderGrandTotal);
+    for (const item of lineItems) item.grandTotal = orderGrandTotal;
 
     if (lineItems.length === 0) {
       throw new BadRequestException('Cart is empty');
@@ -189,30 +251,46 @@ export class StorefrontOrdersService {
     await this.orderModel.insertMany(lineItems);
 
     const paymentMethod = (body.paymentMethod || 'BKASH').toUpperCase();
-    const advanceAmount = body.advancePaymentData?.amount || 0;
-    const totalAmount = toNumber(cart.totalPrice);
+    const advanceAmount = Math.min(
+      toNumber(body.advancePaymentData?.amount) || 0,
+      orderGrandTotal,
+    );
+    const totalAmount = orderGrandTotal;
 
-    // If advance payment was made via bKash, update line items with advancePayment
+    // If advance payment was made via bKash, split it across line items
+    // proportionally by their share of the grand total.
     if (advanceAmount > 0) {
-      const paidPerItem = advanceAmount / lineItems.length;
-      for (const item of lineItems) {
-        item.advancePayment = Number(paidPerItem.toFixed(2));
-        item.remainingAmount = Number((item.totalPrice - item.advancePayment).toFixed(2));
-      }
-      await this.orderModel.bulkWrite(
-        lineItems.map((item) => ({
+      const bulk = lineItems.map((item) => {
+        const paid =
+          orderGrandTotal > 0
+            ? toFixed2(advanceAmount * (item.totalPrice / orderGrandTotal))
+            : 0;
+        const remaining = toFixed2(item.totalPrice - paid);
+        item.advancePayment = paid;
+        item.remainingAmount = remaining;
+        return {
           updateOne: {
-            filter: { orderId: item.orderId, orderItemIndex: item.orderItemIndex },
+            filter: {
+              orderId: item.orderId,
+              orderItemIndex: item.orderItemIndex,
+            },
             update: {
               $set: {
-                advancePayment: item.advancePayment,
-                remainingAmount: item.remainingAmount,
+                advancePayment: paid,
+                remainingAmount: remaining,
               },
             },
           },
-        })),
-      );
+        };
+      });
+      await this.orderModel.bulkWrite(bulk);
     }
+
+    // Persist customer-level totals matching the admin created-order structure
+    // so admin order/lookup views can fall back to order.customer.grandTotal.
+    customer.grandTotal = orderGrandTotal;
+    customer.totalAdvance = advanceAmount;
+    await customer.save();
 
     // Build MFS payment data if advance payment was made via bKash
     const mfsPayment = body.advancePaymentData?.trxID
@@ -333,7 +411,8 @@ export class StorefrontOrdersService {
       size: body.size,
       uniPrice: uni,
       totalPrice: estimation.totalEstimatedPrice,
-      advancePayment: undefined,
+      grandTotal: estimation.totalEstimatedPrice,
+      advancePayment: 0,
       remainingAmount: estimation.totalEstimatedPrice,
       orderNotes: body.notes,
       origin: body.productSourcedFrom,
@@ -347,6 +426,11 @@ export class StorefrontOrdersService {
     };
 
     const created = await this.orderModel.create(doc);
+
+    // Persist customer-level totals (no online advance for this path)
+    customer.grandTotal = estimation.totalEstimatedPrice;
+    customer.totalAdvance = 0;
+    await customer.save();
 
     // Emit real-time notification to admin
     this.eventsGateway.notifyNewOrder({
@@ -477,13 +561,37 @@ export class StorefrontOrdersService {
       byOrder.get(key).push(d);
     }
 
+    // Attach payment status so the storefront account can surface
+    // failed/pending online payments (e.g. "Pay Now" retry).
+    const numbers = [...byOrder.keys()];
+    const payments = numbers.length
+      ? await this.paymentModel
+          .find({ orderId: { $in: numbers } })
+          .select('orderId paymentStatus amount')
+          .lean()
+          .exec()
+      : [];
+    const paymentByNumber = new Map(
+      payments.map((p: any) => [String(p.orderId), p]),
+    );
+
     const orders = [];
     for (const [key, lines] of byOrder) {
       const first = lines[0];
+      const grandTotal = toFixed2(
+        toNumber(first.grandTotal) ||
+          lines.reduce((s, l) => s + toNumber(l.totalPrice), 0),
+      );
+      const advancePayment = toFixed2(
+        lines.reduce((s, l) => s + toNumber(l.advancePayment), 0),
+      );
+      const payment = paymentByNumber.get(key);
       orders.push({
         _id: first._id,
         id: key,
         orderNumber: key,
+        paymentStatus: payment?.paymentStatus || 'pending',
+        paymentAmount: payment?.amount,
         orderType: first.orderType,
         status: first.status,
         isPurchased: first.isPurchased,
@@ -497,7 +605,16 @@ export class StorefrontOrdersService {
         tax: toNumber(first.tax),
         pfu2Charge: toNumber(first.pfu2Charge),
         discount: toNumber(first.discount),
-        totalPrice: toNumber(first.grandTotal || first.totalPrice),
+        totalPrice: grandTotal,
+        grandTotal,
+        advancePayment,
+        totalAdvance: advancePayment,
+        remainingAmount: toFixed2(grandTotal - advancePayment),
+        customer: {
+          customerId: first.customerId,
+          name: first.customerName,
+          contactNo: first.contactNo,
+        },
         shippingAddress: first.shippingAddress,
         billingAddress: first.billingAddress,
         paymentMethod: first.paymentMethod,

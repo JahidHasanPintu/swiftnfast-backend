@@ -7,6 +7,7 @@ import { CartModule } from '../cart/cart.module';
 import { MailModule } from '../mail/mail.module';
 import { NotificationModule } from '../notifications/notification.module';
 import { PreStockOrdersModule } from '../pre-stock-orders/pre-stock-orders.module';
+import { SettingsModule } from '../settings/settings.module';
 import { StorefrontOrdersService } from './storefront-orders.service';
 import { StorefrontOrdersController } from './storefront-orders.controller';
 
@@ -20,6 +21,7 @@ import { StorefrontOrdersController } from './storefront-orders.controller';
     MailModule,
     NotificationModule,
     PreStockOrdersModule,
+    SettingsModule,
   ],
   controllers: [StorefrontOrdersController],
   providers: [StorefrontOrdersService],
