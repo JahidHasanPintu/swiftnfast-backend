@@ -33,7 +33,10 @@ export const CartItemSchema = new mongoose.Schema(
       default: 'PENDING',
     },
     adminReason: { type: String },
-    usaSalesTax: { type: Number, default: 0 },
+    // USA sales tax RATE as a percentage (e.g. 10 = 10%). Null/undefined means
+    // the DEFAULT_USA_TAX_PCT default applies. Not a money amount.
+    usaSalesTax: { type: Number, default: null },
+    // Shipping cost in the source currency. Converted to BDT, never taxed.
     shippingCost: { type: Number, default: 0 },
   },
   { _id: false },

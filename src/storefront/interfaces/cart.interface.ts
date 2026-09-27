@@ -24,7 +24,8 @@ export interface CartItem {
   status?: string;
   adminStatus?: 'PENDING' | 'HOLD' | 'CANCELLED';
   adminReason?: string;
-  usaSalesTax?: number;
+  /** USA sales tax RATE as a percentage (e.g. 10 = 10%). Not money. */
+  usaSalesTax?: number | null;
   shippingCost?: number;
 }
 

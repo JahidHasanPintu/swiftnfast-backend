@@ -196,7 +196,7 @@ export class StorefrontOrdersController {
   // ---- Outside (URL import) orders ---------------------------------------
   @Post('outside-orders/calculate-price')
   async calculatePrice(@Body() body: any) {
-    const data = this.ordersService.calculatePrice(body);
+    const data = await this.ordersService.calculatePrice(body);
     return { success: true, data };
   }
 

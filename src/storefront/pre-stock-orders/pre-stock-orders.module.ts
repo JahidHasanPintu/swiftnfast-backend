@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { DatabaseSchemasModule } from 'src/database/schemas.module';
 import { CartModule } from '../cart/cart.module';
 import { NotificationModule } from '../notifications/notification.module';
+import { SettingsModule } from '../settings/settings.module';
 import { StorageModule } from 'src/storage/storage.module';
 import { PreStockOrdersController } from './pre-stock-orders.controller';
 import { PreStockOrdersService } from './pre-stock-orders.service';
@@ -11,6 +12,7 @@ import { PreStockOrdersService } from './pre-stock-orders.service';
     DatabaseSchemasModule,
     CartModule,
     NotificationModule,
+    SettingsModule,
     StorageModule,
   ],
   controllers: [PreStockOrdersController],

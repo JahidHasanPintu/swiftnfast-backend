@@ -9,6 +9,8 @@ import { Model } from 'mongoose';
 import { CartService } from '../cart/cart.service';
 import { EventsGateway } from '../../common/gateways/events.gateway';
 import { NotificationService } from '../notifications/notification.service';
+import { SettingsService } from '../settings/settings.service';
+import { resolveRate, shippingBdt, unitBdt } from '../utils/pricing.util';
 
 function toNumber(v: any): number {
   const n = Number(v);
@@ -26,7 +28,12 @@ export class PreStockOrdersService {
     private readonly cartService: CartService,
     private readonly eventsGateway: EventsGateway,
     private readonly notificationService: NotificationService,
+    private readonly settingsService: SettingsService,
   ) {}
+
+  private async getExchangeRate(source: string): Promise<number> {
+    return resolveRate(source, (key) => this.settingsService.getByKey(key));
+  }
 
   generateOrderNumber(): string {
     const now = new Date();
@@ -66,13 +73,28 @@ export class PreStockOrdersService {
     const shippingPhone = shipping.phone || body.guestContact || cart.guestContact;
     const shippingEmail = shipping.email || body.guestEmail;
 
-    // Build items array
-    const items = rawItems.map((item: any, i: number) => {
+    // Build items array. Outside orders are converted to BDT (USA taxed,
+    // UK untaxed) and shipping is converted but never taxed; pre-stock items
+    // are already BDT. finalPrice is a PER-UNIT override set by an admin.
+    const ratesCache: Record<string, number> = {};
+    let grandTotal = 0;
+    const items: any[] = [];
+    for (let i = 0; i < rawItems.length; i++) {
+      const item: any = rawItems[i];
       const qty = toNumber(item.quantity) || 1;
       const uni = toNumber(item.price);
-      const total = item.finalPrice != null ? toNumber(item.finalPrice) : uni * qty;
+      const source = String(item.productSourcedFrom || '');
 
-      return {
+      if (!(source in ratesCache)) {
+        ratesCache[source] = await this.getExchangeRate(source);
+      }
+      const rate = ratesCache[source];
+
+      const perUnit = unitBdt(item, rate) + shippingBdt(item, rate);
+      const total = Number((perUnit * qty).toFixed(2));
+      grandTotal += total;
+
+      items.push({
         productId: item.productId || undefined,
         prodDesc: item.name || `Product ${i + 1}`,
         quantity: qty,
@@ -87,10 +109,10 @@ export class PreStockOrdersService {
         productSourcedFrom: item.productSourcedFrom,
         orderNotes: item.notes,
         couponCode: item.promoCode,
-      };
-    });
+      });
+    }
 
-    const grandTotal = toNumber(cart.totalPrice);
+    grandTotal = Number(grandTotal.toFixed(2));
     const advanceAmount = body.advancePaymentData?.amount || 0;
 
     // Distribute advance payment across items

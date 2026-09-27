@@ -15,15 +15,14 @@ import { EventsGateway } from '../../common/gateways/events.gateway';
 import { NotificationService } from '../notifications/notification.service';
 import { PreStockOrdersService } from '../pre-stock-orders/pre-stock-orders.service';
 import { SettingsService } from '../settings/settings.service';
+import {
+  resolveRate,
+  shippingBdt as computeShippingBdt,
+  taxRatePct,
+  unitBdt as computeUnitBdt,
+} from '../utils/pricing.util';
 
 const WEIGHT_CHARGES: Record<string, number> = { USA: 500, UK: 400, UAE: 300 };
-const EXCHANGE_RATES: Record<string, number> = { USA: 140, UK: 140, UAE: 30 };
-// Setting keys mirror the frontend settingsStore.getRate lookups
-const RATE_SETTING_KEYS: Record<string, string> = {
-  USA: 'usd_rate',
-  UK: 'gbp_rate',
-  UAE: 'aed_rate',
-};
 const OUTSIDE_TO_IMPORT: Record<string, string> = {
   DRAFT: 'Pending',
   SUBMITTED: 'Pending',
@@ -62,23 +61,9 @@ export class StorefrontOrdersService {
   ) {}
 
   // Exchange rate for a country, preferring the admin-managed Settings value
-  // (same keys the storefront settingsStore uses) and falling back to fixed rates.
+  // (same keys the storefront settingsStore uses) and falling back to 1.
   private async getExchangeRate(source: string): Promise<number> {
-    const key = RATE_SETTING_KEYS[source || ''] || '';
-    if (!key) return 1;
-    let setting: any = null;
-    try {
-      setting = await this.settingsService.getByKey(key);
-    } catch {
-      setting = null;
-    }
-    const val = setting?.value != null ? parseFloat(String(setting.value)) : NaN;
-    if (!Number.isFinite(val) || val <= 0) {
-      // Match the frontend settingsStore.getRate default (1) so stored totals
-      // align with what the customer saw/paid at checkout.
-      return 1;
-    }
-    return val;
+    return resolveRate(source, (key) => this.settingsService.getByKey(key));
   }
 
   // -------------------------------------------------------------------------
@@ -146,7 +131,6 @@ export class StorefrontOrdersService {
       const type = item.type || 'product';
       const qty = toNumber(item.quantity) || 1;
       const uni = toNumber(item.price);
-      const isOutside = type === 'outside_order';
       const source = item.productSourcedFrom || '';
 
       if (!(source in ratesCache)) {
@@ -154,22 +138,14 @@ export class StorefrontOrdersService {
       }
       const rate = ratesCache[source];
 
-      // Per-line BDT math mirroring the checkout page: per-unit = finalPrice
-      // (manual override) or source price × 1.1 × rate; tax/shipping converted
-      // the same way for outside orders only; all scaled by quantity.
-      let unitBdt = uni;
-      if (isOutside) {
-        unitBdt =
-          item.priceManuallyUpdated &&
-          item.finalPrice != null &&
-          toNumber(item.finalPrice) > 0
-            ? toNumber(item.finalPrice)
-            : uni * 1.1 * rate;
-      }
-      const bdtFactor = isOutside ? 1.1 * rate : 1;
-      const taxBdt = toNumber(item.usaSalesTax) * bdtFactor;
-      const shippingBdt = toNumber(item.shippingCost) * bdtFactor;
-      const lineTotal = toFixed2((unitBdt + taxBdt + shippingBdt) * qty);
+      // Per-line BDT math mirroring the checkout page:
+      //   per-unit = finalPrice (manual override, tax already baked in)
+      //              or price * (1 + taxRate/100) * rate   [USA only]
+      //   shipping = shippingCost * rate                     [never taxed]
+      // Pre-stock items are already BDT and are passed through untouched.
+      const unitBdt = computeUnitBdt(item, rate);
+      const shippingBdtValue = computeShippingBdt(item, rate);
+      const lineTotal = toFixed2((unitBdt + shippingBdtValue) * qty);
       orderGrandTotal += lineTotal;
 
       let productId;
@@ -230,8 +206,10 @@ export class StorefrontOrdersService {
         guestContact: body.guestContact || shippingPhone,
         isPurchased: false,
         itemPrice: toFixed2(unitBdt),
-        tax: toFixed2(taxBdt * qty),
-        shippingCostBdt: toFixed2(shippingBdt * qty),
+        // Tax is already folded into itemPrice (tax is a rate on the source
+        // price, not a separate money line), so no separate tax line applies.
+        tax: 0,
+        shippingCostBdt: toFixed2(shippingBdtValue * qty),
         pfu2Charge: 0,
         discount: toNumber(cart.discount),
         grandTotal: 0,
@@ -349,7 +327,7 @@ export class StorefrontOrdersService {
         'productUrl, productSourcedFrom and price are required',
       );
     }
-    const estimation = this.calculatePrice({
+    const estimation = await this.calculatePrice({
       price: body.price,
       productSourcedFrom: body.productSourcedFrom,
       quantity: body.quantity || 1,
@@ -441,7 +419,14 @@ export class StorefrontOrdersService {
     return { id: created._id, orderNumber, ...created.toObject() };
   }
 
-  calculatePrice(body: {
+  /**
+   * Preliminary estimate for an outside order.
+   *   USA -> (price * qty) * (1 + taxRate/100) * usd_rate
+   *   UK  -> (price * qty) * gbp_rate
+   * The rate comes from the admin-managed Settings collection, not a hardcoded
+   * table, so admin rate changes are reflected immediately.
+   */
+  async calculatePrice(body: {
     price: number;
     productSourcedFrom: string;
     quantity?: number;
@@ -455,8 +440,9 @@ export class StorefrontOrdersService {
     }
     const basePrice = toNumber(price) * (toNumber(body.quantity) || 1);
     const weightCharge = WEIGHT_CHARGES[productSourcedFrom] || 0;
-    const exchangeRate = EXCHANGE_RATES[productSourcedFrom] || 140;
-    const approximatePrice = basePrice * 1.1 * exchangeRate;
+    const exchangeRate = await this.getExchangeRate(productSourcedFrom);
+    const pct = taxRatePct(productSourcedFrom, undefined);
+    const approximatePrice = basePrice * (1 + pct / 100) * exchangeRate;
 
     let discount = 0;
     if (body.promoCode && body.promoCode.toUpperCase() === 'SAVE5') {

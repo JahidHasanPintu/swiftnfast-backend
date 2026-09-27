@@ -307,7 +307,8 @@ export class CartService {
       price?: number;
       finalPrice?: number;
       type?: string;
-      usaSalesTax?: number;
+      /** USA sales tax RATE as a percentage (e.g. 10 = 10%). Not money. */
+      usaSalesTax?: number | null;
       shippingCost?: number;
       updatedBy?: string;
     },
@@ -334,7 +335,12 @@ export class CartService {
       items[idx].priceManuallyUpdated = true;
     }
     if (body.usaSalesTax !== undefined) {
-      items[idx].usaSalesTax = toFixed2(Number(body.usaSalesTax));
+      // `usaSalesTax` is a PERCENTAGE RATE (e.g. 10 = 10%), not a money
+      // amount. A blank / non-numeric / non-positive value is stored as null so
+      // the default rate applies instead of being pinned to 0.
+      const rate = Number(body.usaSalesTax);
+      items[idx].usaSalesTax =
+        Number.isFinite(rate) && rate > 0 ? toFixed2(rate) : null;
     }
     if (body.shippingCost !== undefined) {
       items[idx].shippingCost = toFixed2(Number(body.shippingCost));
