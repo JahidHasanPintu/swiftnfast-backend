@@ -2,18 +2,80 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 
+/**
+ * Parse a recipient list into unique, individually valid email addresses.
+ *
+ * Accepts a bare string (the usual env value, comma/semicolon/newline
+ * separated) or a pre-split array. Malformed entries are dropped instead of
+ * failing the whole notification, so one typo cannot stop admins being
+ * alerted. Rejected entries are returned so the caller can log exactly what
+ * was ignored.
+ */
+export function parseRecipientList(raw: unknown): {
+  valid: string[];
+  invalid: string[];
+} {
+  let parts: string[];
+  if (Array.isArray(raw)) {
+    parts = raw.map((value) => String(value));
+  } else if (typeof raw === 'string') {
+    parts = raw.split(/[,;\r\n]+/);
+  } else {
+    parts = [];
+  }
+
+  const valid: string[] = [];
+  const invalid: string[] = [];
+  const seen = new Set<string>();
+
+  for (const part of parts) {
+    const candidate = part.trim();
+    if (!candidate) continue;
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate)) {
+      invalid.push(candidate);
+      continue;
+    }
+
+    const key = candidate.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    valid.push(candidate);
+  }
+
+  return { valid, invalid };
+}
+
+function describeError(reason: unknown): string {
+  if (reason instanceof Error) return reason.stack ?? reason.message;
+  return String(reason);
+}
+
 @Injectable()
 export class MailService {
   private readonly logger = new Logger('MailService');
   private readonly transporter: nodemailer.Transporter;
   private readonly from: string;
-  private readonly orderEmail: string;
+  private readonly priceRequestRecipients: string[];
   private readonly clientUrl: string;
 
   constructor(private readonly config: ConfigService) {
     const smtpFrom = this.config.get('SMTP_FROM') || this.config.get('SMTP_USER');
     this.from = `PFU2 <${smtpFrom}>`;
-    this.orderEmail = this.config.get('ORDER_EMAIL');
+
+    // `??` so an explicitly empty PRICE_REQUEST_EMAILS disables the
+    // notification, while an unset one falls back to the legacy ORDER_EMAIL.
+    const { valid, invalid } = parseRecipientList(
+      this.config.get('PRICE_REQUEST_EMAILS') ?? this.config.get('ORDER_EMAIL'),
+    );
+    this.priceRequestRecipients = valid;
+    if (invalid.length) {
+      this.logger.warn(
+        `Ignoring ${invalid.length} malformed address(es) in ` +
+          `PRICE_REQUEST_EMAILS/ORDER_EMAIL: ${invalid.join(', ')}`,
+      );
+    }
+
     this.clientUrl = this.config.get('CLIENT_URL') || 'http://localhost:5173';
 
     this.transporter = nodemailer.createTransport({
@@ -70,8 +132,12 @@ export class MailService {
   }
 
   async sendPriceRequestEmail(customerName: string, cartId: string): Promise<void> {
-    if (!this.orderEmail) {
-      this.logger.warn('ORDER_EMAIL not configured, skipping price request notification');
+    const recipients = this.priceRequestRecipients;
+    if (!recipients.length) {
+      this.logger.warn(
+        'No admin recipients configured (set PRICE_REQUEST_EMAILS or ORDER_EMAIL), ' +
+          'skipping price request notification',
+      );
       return;
     }
 
@@ -103,16 +169,36 @@ export class MailService {
         </div>
       </div>`;
 
-    try {
-      await this.transporter.sendMail({
-        from: this.from,
-        to: this.orderEmail,
-        subject: 'New Price Request Received - PFU2',
-        html,
-      });
-      this.logger.log(`Price request email sent to ${this.orderEmail}`);
-    } catch (err) {
-      this.logger.error('Failed to send price request email', err.stack);
+    // One SMTP send per recipient so a single bad address cannot block the
+    // others. allSettled never rejects, keeping this method non-throwing.
+    const results = await Promise.allSettled(
+      recipients.map((to) =>
+        this.transporter.sendMail({
+          from: this.from,
+          to,
+          subject: 'New Price Request Received - PFU2',
+          html,
+        }),
+      ),
+    );
+
+    let sent = 0;
+    results.forEach((result, index) => {
+      const to = recipients[index];
+      if (result.status === 'fulfilled') {
+        sent += 1;
+        this.logger.log(`Price request email sent to ${to}`);
+      } else {
+        this.logger.error(
+          `Failed to send price request email to ${to}: ${describeError(result.reason)}`,
+        );
+      }
+    });
+
+    if (sent < recipients.length) {
+      this.logger.warn(
+        `Price request notification partially delivered: ${sent}/${recipients.length} recipient(s)`,
+      );
     }
   }
 
