@@ -8,6 +8,12 @@ import * as mongoose from 'mongoose';
 import { Model } from 'mongoose';
 import { CartDocument } from '../interfaces/cart.interface';
 import { generateImageUrl } from '../utils/image-url.util';
+import { SettingsService } from '../settings/settings.service';
+import {
+  breakdownBdt,
+  moneyFieldsFor,
+  resolveRate,
+} from '../utils/pricing.util';
 
 function parseItems(raw: any): any[] {
   if (raw == null) return [];
@@ -27,16 +33,41 @@ function toFixed2(n: number): number {
   return Number((Math.round(n * 100) / 100).toFixed(2));
 }
 
-function calculateCartTotals(items: any[], discount = 0, taxPct = 0) {
-  const itemPrice = toFixed2(
-    items.reduce(
-      (acc, it) => acc + (Number(it.price) || 0) * (Number(it.quantity) || 0),
-      0,
-    ),
-  );
-  const tax = toFixed2(itemPrice * (taxPct / 100));
-  const totalPrice = toFixed2(itemPrice + tax - discount);
-  return { itemPrice, tax, totalPrice };
+/**
+ * Cart totals in BDT, derived from the canonical per-item breakdown in
+ * pricing.util.ts (ceil entered price -> tax -> FX -> ceil BDT).
+ *
+ * `itemPrice` is the tax-INCLUSIVE product price, `tax` is the tax portion of
+ * it, and `shippingBdt` is converted-but-untaxed shipping, so the customer
+ * summary can show product price / tax / shipping as three separate lines.
+ * Discount is subtracted at the end.
+ */
+function calculateCartTotals(
+  items: any[],
+  discount = 0,
+  getRate: (source: string) => number = () => 1,
+) {
+  let basePriceBdt = 0;
+  let taxBdt = 0;
+  let shippingBdt = 0;
+
+  for (const it of items || []) {
+    const b = breakdownBdt(it, getRate(String(it?.productSourcedFrom || '')));
+    const qty = Number(it?.quantity) || 0;
+    basePriceBdt += b.basePriceBdt * qty;
+    taxBdt += b.taxBdt * qty;
+    shippingBdt += b.shippingBdt * qty;
+  }
+
+  const itemPrice = basePriceBdt + taxBdt;
+  const totalPrice = toFixed2(itemPrice + shippingBdt - (Number(discount) || 0));
+  return {
+    itemPrice: toFixed2(itemPrice),
+    tax: toFixed2(taxBdt),
+    shippingBdt: toFixed2(shippingBdt),
+    basePriceBdt: toFixed2(basePriceBdt),
+    totalPrice,
+  };
 }
 
 @Injectable()
@@ -45,7 +76,56 @@ export class CartService {
     @InjectModel('Cart') private readonly cartModel: Model<CartDocument>,
     @InjectModel('Customer') private readonly userModel: Model<any>,
     @InjectModel('Product') private readonly productModel: Model<any>,
+    private readonly settingsService: SettingsService,
   ) {}
+
+  /**
+   * Build a synchronous rate lookup by first awaiting every rate we need for
+   * the given items. Call this once per cart mutation, then pass the returned
+   * function to `calculateCartTotals` and `stampMoney`.
+   */
+  private async buildRateLookup(items: any[]): Promise<(source: string) => number> {
+    const sources = new Set<string>();
+    for (const it of items || []) {
+      const s = String(it?.productSourcedFrom || '').trim().toUpperCase();
+      if (s) sources.add(s);
+    }
+    const rates = new Map<string, number>();
+    await Promise.all(
+      [...sources].map(async (s) => {
+        rates.set(
+          s,
+          await resolveRate(s, (key) => this.settingsService.getByKey(key)),
+        );
+      }),
+    );
+    return (source: string) =>
+      rates.get(String(source || '').trim().toUpperCase()) ?? 1;
+  }
+
+  /**
+   * Stamp the persisted per-unit BDT breakdown (priceBdt / taxBdt /
+   * shippingBdt) onto every item, so the customer summary can read stored
+   * values instead of re-deriving them. Items are mutated in place; the caller
+   * assigns the array back to the document before saving.
+   */
+  private stampMoney(items: any[], getRate: (source: string) => number) {
+    for (const it of items || []) {
+      const source = String(it?.productSourcedFrom || '');
+      Object.assign(it, moneyFieldsFor(it, getRate(source)));
+    }
+    return items;
+  }
+
+  /**
+   * One-stop helper for every cart mutation: stamp the money breakdown onto the
+   * items and recompute the cart-level totals with the same canonical pipeline.
+   */
+  private async applyPricing(cart: any, items: any[]) {
+    const getRate = await this.buildRateLookup(items);
+    this.stampMoney(items, getRate);
+    return calculateCartTotals(items, cart?.discount || 0, getRate);
+  }
 
   private async enrich(cartDoc: CartDocument) {
     const cart = cartDoc.toObject ? cartDoc.toObject() : cartDoc;
@@ -289,10 +369,11 @@ export class CartService {
       items.push(item);
     }
 
-    const totals = calculateCartTotals(items, cart.discount);
+    const totals = await this.applyPricing(cart, items);
     cart.items = items;
     cart.itemPrice = totals.itemPrice;
     cart.tax = totals.tax;
+    cart.shippingBdt = totals.shippingBdt;
     cart.totalPrice = totals.totalPrice;
     cart.isRead = false;
     await cart.save();
@@ -357,10 +438,11 @@ export class CartService {
       }
     }
 
-    const totals = calculateCartTotals(items, cart.discount);
+    const totals = await this.applyPricing(cart, items);
     cart.items = items;
     cart.itemPrice = totals.itemPrice;
     cart.tax = totals.tax;
+    cart.shippingBdt = totals.shippingBdt;
     cart.totalPrice = totals.totalPrice;
     await cart.save();
     return this.enrich(cart);
@@ -387,10 +469,11 @@ export class CartService {
     if (next < 1)
       throw new BadRequestException('Quantity cannot be less than 1');
     items[idx].quantity = next;
-    const totals = calculateCartTotals(items, cart.discount);
+    const totals = await this.applyPricing(cart, items);
     cart.items = items;
     cart.itemPrice = totals.itemPrice;
     cart.tax = totals.tax;
+    cart.shippingBdt = totals.shippingBdt;
     cart.totalPrice = totals.totalPrice;
     await cart.save();
     return this.enrich(cart);
@@ -477,10 +560,11 @@ export class CartService {
           (it.type || 'product') === (productType || 'product')
         ),
     );
-    const totals = calculateCartTotals(items, cart.discount);
+    const totals = await this.applyPricing(cart, items);
     cart.items = items;
     cart.itemPrice = totals.itemPrice;
     cart.tax = totals.tax;
+    cart.shippingBdt = totals.shippingBdt;
     cart.totalPrice = totals.totalPrice;
     await cart.save();
     return this.enrich(cart);
@@ -492,6 +576,7 @@ export class CartService {
     cart.items = [];
     cart.itemPrice = 0;
     cart.tax = 0;
+    cart.shippingBdt = 0;
     cart.totalPrice = toFixed2((cart.pfu2Charge || 0) + (cart.discount || 0));
     await cart.save();
     return this.enrich(cart);
@@ -503,6 +588,7 @@ export class CartService {
     cart.items = [];
     cart.itemPrice = 0;
     cart.tax = 0;
+    cart.shippingBdt = 0;
     cart.totalPrice = toFixed2((cart.pfu2Charge || 0) + (cart.discount || 0));
     await cart.save();
     return this.enrich(cart);
@@ -542,10 +628,11 @@ export class CartService {
         userItems.push(gItem);
       }
     }
-    const totals = calculateCartTotals(userItems, userCart.discount);
+    const totals = await this.applyPricing(userCart, userItems);
     userCart.items = userItems;
     userCart.itemPrice = totals.itemPrice;
     userCart.tax = totals.tax;
+    userCart.shippingBdt = totals.shippingBdt;
     userCart.totalPrice = totals.totalPrice;
     await userCart.save();
     await guestCart.deleteOne();

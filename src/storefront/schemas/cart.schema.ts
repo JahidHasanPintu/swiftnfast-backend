@@ -38,6 +38,15 @@ export const CartItemSchema = new mongoose.Schema(
     usaSalesTax: { type: Number, default: null },
     // Shipping cost in the source currency. Converted to BDT, never taxed.
     shippingCost: { type: Number, default: 0 },
+    // --- Persisted money breakdown (per unit, BDT) ---------------------
+    // Stamped by the cart service on every write from pricing.util.ts so the
+    // customer summary can show price / tax / shipping per item without
+    // re-deriving them. `default: null` is deliberate: null/absent means "not
+    // yet stamped", which breakdownBdt() treats as "compute it live", so carts
+    // written before these fields existed keep pricing correctly.
+    priceBdt: { type: Number, default: null }, // tax INCLUDED, shipping EXCLUDED
+    taxBdt: { type: Number, default: null }, // tax portion of priceBdt
+    shippingBdt: { type: Number, default: null }, // converted, never taxed
   },
   { _id: false },
 );
@@ -51,8 +60,11 @@ export const CartSchema = new mongoose.Schema(
     isRead: { type: Boolean, default: false },
     requestedAt: { type: Date },
     items: { type: [CartItemSchema], default: [] },
-    itemPrice: { type: Number, default: 0 },
-    tax: { type: Number, default: 0 },
+    itemPrice: { type: Number, default: 0 }, // tax-inclusive product price, BDT
+    tax: { type: Number, default: 0 }, // tax portion of itemPrice, BDT
+    // Converted-but-untaxed shipping, BDT. Kept separate so the summary can
+    // show product price / tax / shipping as three distinct lines.
+    shippingBdt: { type: Number, default: 0 },
     pfu2Charge: { type: Number, default: 0 },
     discount: { type: Number, default: 0 },
     totalPrice: { type: Number, default: 0 },

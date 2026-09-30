@@ -16,6 +16,7 @@ import { NotificationService } from '../notifications/notification.service';
 import { PreStockOrdersService } from '../pre-stock-orders/pre-stock-orders.service';
 import { SettingsService } from '../settings/settings.service';
 import {
+  ceilToWhole,
   resolveRate,
   shippingBdt as computeShippingBdt,
   taxRatePct,
@@ -420,9 +421,13 @@ export class StorefrontOrdersService {
   }
 
   /**
-   * Preliminary estimate for an outside order.
-   *   USA -> (price * qty) * (1 + taxRate/100) * usd_rate
-   *   UK  -> (price * qty) * gbp_rate
+   * Preliminary estimate for an outside order, using the same canonical
+   * pipeline as the cart so the number the customer sees before saving is the
+   * number they are actually charged:
+   *   ceil the entered price, apply USA tax, convert, then ceil the BDT result
+   *   USA -> ceil(ceil(price) * (1 + taxRate/100) * usd_rate)
+   *   UK  -> ceil(ceil(price) * gbp_rate)
+   * Ceiling is per-unit; quantity then multiplies the finished unit price.
    * The rate comes from the admin-managed Settings collection, not a hardcoded
    * table, so admin rate changes are reflected immediately.
    */
@@ -438,11 +443,17 @@ export class StorefrontOrdersService {
         'Price and product source are required for calculation',
       );
     }
-    const basePrice = toNumber(price) * (toNumber(body.quantity) || 1);
+    const quantity = toNumber(body.quantity) || 1;
     const weightCharge = WEIGHT_CHARGES[productSourcedFrom] || 0;
     const exchangeRate = await this.getExchangeRate(productSourcedFrom);
     const pct = taxRatePct(productSourcedFrom, undefined);
-    const approximatePrice = basePrice * (1 + pct / 100) * exchangeRate;
+
+    // Per-unit, then x quantity - never a re-rounded line total.
+    const unitBdt = ceilToWhole(
+      ceilToWhole(toNumber(price)) * (1 + pct / 100) * exchangeRate,
+    );
+    const baseUnitBdt = ceilToWhole(ceilToWhole(toNumber(price)) * exchangeRate);
+    const approximatePrice = unitBdt * quantity;
 
     let discount = 0;
     if (body.promoCode && body.promoCode.toUpperCase() === 'SAVE5') {
@@ -451,6 +462,9 @@ export class StorefrontOrdersService {
 
     const totalEstimatedPrice = approximatePrice;
     return {
+      unitPriceBdt: unitBdt,
+      unitPriceBdtExTax: baseUnitBdt,
+      taxBdt: unitBdt - baseUnitBdt,
       approximatePrice: Number(approximatePrice.toFixed(2)),
       weightCharge: Number(weightCharge.toFixed(2)),
       discount: Number(discount.toFixed(2)),

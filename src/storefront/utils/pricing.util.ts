@@ -1,17 +1,31 @@
 /**
- * Canonical outside-order pricing.
+ * Canonical outside-order pricing (mirrors pfu2-frontend/src/utils/pricing.ts).
  *
- *   USA item : (price * (1 + taxPct/100)) * usd_rate
- *   UK item  : price * gbp_rate                      (no sales tax)
+ *   USA item : ceil(price) * (1 + taxPct/100) * usd_rate,  then ceil -> BDT
+ *   UK item  : ceil(price) * gbp_rate,                     then ceil -> BDT
+ *
+ * The entered price may be fractional (39.5, 1.2, ...). It is rounded UP to the
+ * next whole unit first, then taxed and converted, and the BDT result is
+ * rounded UP again, so every per-unit figure is whole BDT and the customer,
+ * admin and backend never disagree.
+ *
+ * Ceiling is per-unit; quantity multiplies the finished unit price, so a qty of
+ * 3 costs exactly 3x one unit (never a re-rounded line total).
  *
  * `usaSalesTax` is stored as a PERCENTAGE RATE (e.g. 10 = 10%), not a money
  * amount. When it is absent the DEFAULT_USA_TAX_PCT default applies. Only USA
  * items are taxed; every other source is tax-free.
  *
- * Shipping is converted with the rate but is never taxed.
+ * Shipping is converted with the rate, never taxed, and ceiled like any other
+ * BDT figure.
+ *
+ * Pre-stock (`type !== "outside_order"`) items are already denominated in BDT,
+ * so there is nothing to convert or ceil - they pass through untouched.
  *
  * The admin-supplied `finalPrice` is a PER-UNIT BDT value that already has tax
- * baked in, so when present it wins outright and tax is not applied again.
+ * baked in, so when present it wins outright, is trusted exactly as typed (never
+ * ceiled or re-derived), and tax is reported as 0 because the split is
+ * unknowable.
  */
 
 /** Default USA sales tax rate (%). */
@@ -84,15 +98,54 @@ function toNum(v: any): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/**
+ * Round a value UP to the next whole unit.
+ *
+ * `ceilToWhole(40) === 40`; `ceilToWhole(39.5) === 40`; `ceilToWhole(1.2) === 2`.
+ * Non-positive / non-finite input collapses to 0 so a blank or malformed value
+ * can never leak a negative into a total.
+ */
+export function ceilToWhole(value: any): number {
+  const n = toNum(value);
+  return n <= 0 ? 0 : Math.ceil(n);
+}
+
 /** Whether the item is an outside/import order (vs. a pre-stock product). */
 export function isOutsideOrder(item: BdtItem): boolean {
   return (item?.type || 'product') === 'outside_order';
 }
 
 /**
- * Per-unit BDT for an item.
- * Pre-stock items stay raw BDT; outside orders are converted with the rate and
- * taxed only when the source is USA.
+ * Per-unit BDT BEFORE sales tax - product price alone, converted and ceiled.
+ *
+ * Counterpart to `unitBdt`: the difference between the two is exactly the tax
+ * charged on one unit, which is what lets the summary list price and tax
+ * separately. An admin `finalPrice` is trusted verbatim on both sides, so its
+ * tax split resolves to 0.
+ */
+export function baseUnitBdt(
+  item: BdtItem,
+  rate: number,
+  opts: { useManualFinalPrice?: boolean } = {},
+): number {
+  if (!isOutsideOrder(item)) return toNum(item?.price);
+
+  if (opts.useManualFinalPrice !== false && item?.priceManuallyUpdated) {
+    const manual = toNum(item?.finalPrice);
+    if (manual > 0) return manual;
+  }
+
+  const source = String(item?.productSourcedFrom || '').trim();
+  if (!source) return toNum(item?.price);
+
+  return ceilToWhole(ceilToWhole(item?.price) * rate);
+}
+
+/**
+ * Per-unit BDT, tax included, shipping excluded.
+ *
+ * Pipeline: ceil the entered price, apply USA tax, convert with the rate, then
+ * ceil the BDT result. Pre-stock items are already BDT and pass through.
  */
 export function unitBdt(
   item: BdtItem,
@@ -110,19 +163,79 @@ export function unitBdt(
   if (!source) return toNum(item?.price);
 
   const pct = taxRatePct(source, item?.usaSalesTax);
-  return toNum(item?.price) * (1 + pct / 100) * rate;
+  return ceilToWhole(ceilToWhole(item?.price) * (1 + pct / 100) * rate);
 }
 
-/** Per-unit BDT for shipping. Converted with the rate, never taxed. */
+/** Per-unit BDT for shipping. Converted with the rate, never taxed, ceiled. */
 export function shippingBdt(item: BdtItem, rate: number): number {
   if (!isOutsideOrder(item)) return toNum(item?.shippingCost);
   const source = String(item?.productSourcedFrom || '').trim();
   if (!source) return toNum(item?.shippingCost);
-  return toNum(item?.shippingCost) * rate;
+  return ceilToWhole(toNum(item?.shippingCost) * rate);
+}
+
+/** Sales tax on one unit, in BDT. Never negative. */
+export function unitTaxBdt(item: BdtItem, rate: number): number {
+  return Math.max(0, unitBdt(item, rate) - baseUnitBdt(item, rate));
 }
 
 /** Full line total in BDT with quantity applied. */
 export function lineBdt(item: BdtItem, rate: number): number {
   const qty = toNum(item?.quantity) || 1;
   return (unitBdt(item, rate) + shippingBdt(item, rate)) * qty;
+}
+
+export interface ItemMoneyBreakdown {
+  /** Final BDT per unit, tax INCLUDED, shipping EXCLUDED. */
+  priceBdt: number;
+  /** The same price with tax stripped out, BDT. Show this as "Product price". */
+  basePriceBdt: number;
+  /** The tax portion of `priceBdt`, in BDT. 0 for admin-set finalPrice. */
+  taxBdt: number;
+  /** Shipping converted to BDT, never taxed. */
+  shippingBdt: number;
+  /** Whole-line total: (priceBdt + shippingBdt) x quantity. */
+  lineTotalBdt: number;
+}
+
+/**
+ * Resolve the per-unit money breakdown for an item, preferring the values the
+ * backend stamped onto it and falling back to live computation for cart rows
+ * written before those fields existed. Keeping the fallback means old carts
+ * need no migration and still price identically.
+ *
+ * Invariant: `priceBdt === basePriceBdt + taxBdt`, so a summary can render
+ * "Product price" (basePriceBdt), "Sales tax" (taxBdt) and "Total"
+ * (basePriceBdt + taxBdt) without double-counting.
+ */
+export function breakdownBdt(item: BdtItem, rate: number): ItemMoneyBreakdown {
+  const qty = toNum(item?.quantity) || 1;
+
+  const storedPrice = toNum((item as any)?.priceBdt);
+  const storedShipping = toNum((item as any)?.shippingBdt);
+  const hasStored = storedPrice > 0 || storedShipping > 0;
+
+  const priceBdt = hasStored ? storedPrice : unitBdt(item, rate);
+  const ship = hasStored ? storedShipping : shippingBdt(item, rate);
+  const basePriceBdt = hasStored
+    ? priceBdt - toNum((item as any)?.taxBdt)
+    : baseUnitBdt(item, rate);
+  const taxBdt = priceBdt - basePriceBdt;
+
+  return {
+    priceBdt,
+    basePriceBdt,
+    taxBdt,
+    shippingBdt: ship,
+    lineTotalBdt: (priceBdt + ship) * qty,
+  };
+}
+
+/**
+ * Compute (but do not persist) the money fields to stamp onto a cart item.
+ * Returns a plain patch object; callers merge it into the item document.
+ */
+export function moneyFieldsFor(item: BdtItem, rate: number) {
+  const { priceBdt, taxBdt, shippingBdt: ship } = breakdownBdt(item, rate);
+  return { priceBdt, taxBdt, shippingBdt: ship };
 }

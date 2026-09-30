@@ -27,6 +27,15 @@ export interface CartItem {
   /** USA sales tax RATE as a percentage (e.g. 10 = 10%). Not money. */
   usaSalesTax?: number | null;
   shippingCost?: number;
+  /**
+   * Per-unit BDT breakdown stamped on every cart write from pricing.util.ts
+   * (ceil entered price -> tax -> FX -> ceil BDT). Null/absent means "not yet
+   * stamped", which breakdownBdt() reads as "compute it live", so carts written
+   * before these fields existed keep pricing correctly without a migration.
+   */
+  priceBdt?: number | null; // tax INCLUDED, shipping EXCLUDED
+  taxBdt?: number | null; // tax portion of priceBdt
+  shippingBdt?: number | null; // converted, never taxed
 }
 
 export interface Cart {
@@ -37,8 +46,10 @@ export interface Cart {
   isRead?: boolean;
   requestedAt?: Date;
   items: CartItem[];
-  itemPrice?: number;
-  tax?: number;
+  itemPrice?: number; // tax-inclusive product price, BDT
+  tax?: number; // tax portion of itemPrice, BDT
+  /** Converted-but-untaxed shipping total, BDT. */
+  shippingBdt?: number;
   pfu2Charge?: number;
   discount?: number;
   totalPrice?: number;
