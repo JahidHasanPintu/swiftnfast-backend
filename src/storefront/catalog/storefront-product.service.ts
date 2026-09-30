@@ -34,11 +34,22 @@ export class StorefrontProductService {
 
   private serialize(doc: any) {
     const obj = doc.toObject ? doc.toObject() : doc;
+
+    // `.populate('categoryId', ...)` replaces the ObjectId on `categoryId` with
+    // the populated category document, so there is never a `category` field to
+    // read. Derive it here, and expose `categoryId` as the raw id string so
+    // consumers can still filter by category.
+    const populated = obj.categoryId;
+    const hasCategoryDoc =
+      populated && typeof populated === 'object' && populated._id != null;
+
     return {
       ...obj,
       id: obj._id?.toString(),
-      categoryId: obj.categoryId,
-      category: obj.category,
+      categoryId: hasCategoryDoc ? populated._id.toString() : populated ?? null,
+      category: hasCategoryDoc
+        ? { id: populated._id.toString(), name: populated.name }
+        : null,
       images: parseImages(obj.images),
     };
   }
