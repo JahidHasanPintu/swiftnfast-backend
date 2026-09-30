@@ -114,7 +114,7 @@ export class MailService {
         </p>
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
         <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">PFU2</p>
-        <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">Contact: 09678-114411 | Email: info@pfu2.com</p>
+        <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">Contact: 09678882888, 01613-333011 | Email: shop.pfu2@gmail.com</p>
         <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">House 56, Road 01, Block A, Niketan, Gulshan - 01, Dhaka - 1212</p>
       </div>`;
 
@@ -164,7 +164,7 @@ export class MailService {
           </p>
           <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
           <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">PFU2</p>
-          <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">Contact: 09678-114411 | Email: info@pfu2.com</p>
+          <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">Contact: 09678882888, 01613-333011 | Email: shop.pfu2@gmail.com</p>
           <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">House 56, Road 01, Block A, Niketan, Gulshan - 01, Dhaka - 1212</p>
         </div>
       </div>`;
@@ -269,7 +269,7 @@ export class MailService {
                 <tr>
                   <td style="padding: 0 30px 20px 30px; text-align: center; border-top: 1px solid #e5e7eb;">
                     <p style="color: #9ca3af; font-size: 11px; margin: 15px 0 3px 0;">PFU2</p>
-                    <p style="color: #9ca3af; font-size: 11px; margin: 3px 0;">Contact: 09678-114411 | Email: info@pfu2.com</p>
+                    <p style="color: #9ca3af; font-size: 11px; margin: 3px 0;">Contact: 09678882888, 01613-333011 | Email: shop.pfu2@gmail.com</p>
                     <p style="color: #9ca3af; font-size: 11px; margin: 3px 0;">House 56, Road 01, Block A, Niketan, Gulshan - 01, Dhaka - 1212</p>
                   </td>
                 </tr>
@@ -316,7 +316,7 @@ export class MailService {
         </div>
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
         <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">PFU2</p>
-        <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">Contact: 09678-114411 | Email: info@pfu2.com</p>
+        <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">Contact: 09678882888, 01613-333011 | Email: shop.pfu2@gmail.com</p>
         <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">House 56, Road 01, Block A, Niketan, Gulshan - 01, Dhaka - 1212</p>
       </div>`;
 
@@ -355,7 +355,7 @@ export class MailService {
         </div>
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
         <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">PFU2</p>
-        <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">Contact: 09678-114411 | Email: info@pfu2.com</p>
+        <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">Contact: 09678882888, 01613-333011 | Email: shop.pfu2@gmail.com</p>
         <p style="color: #999; font-size: 11px; text-align: center; margin: 5px 0;">House 56, Road 01, Block A, Niketan, Gulshan - 01, Dhaka - 1212</p>
       </div>`;
 
@@ -471,7 +471,7 @@ export class MailService {
                 <tr>
                   <td style="padding: 0 30px 20px 30px; text-align: center; border-top: 1px solid #e5e7eb;">
                     <p style="color: #9ca3af; font-size: 11px; margin: 15px 0 3px 0;">PFU2</p>
-                    <p style="color: #9ca3af; font-size: 11px; margin: 3px 0;">Contact: 09678-114411 | Email: info@pfu2.com</p>
+                    <p style="color: #9ca3af; font-size: 11px; margin: 3px 0;">Contact: 09678882888, 01613-333011 | Email: shop.pfu2@gmail.com</p>
                     <p style="color: #9ca3af; font-size: 11px; margin: 3px 0;">House 56, Road 01, Block A, Niketan, Gulshan - 01, Dhaka - 1212</p>
                   </td>
                 </tr>

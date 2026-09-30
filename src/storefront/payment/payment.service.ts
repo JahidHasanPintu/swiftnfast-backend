@@ -777,7 +777,7 @@ export class PaymentService {
                   <tr>
                     <td style="padding: 15px 30px; text-align: center;">
                       <p style="color: #9ca3af; font-size: 11px; margin: 3px 0;">PFU2</p>
-                      <p style="color: #9ca3af; font-size: 11px; margin: 3px 0;">Contact: 09678-114411 | Email: info@pfu2.com</p>
+                      <p style="color: #9ca3af; font-size: 11px; margin: 3px 0;">Contact: 09678882888, 01613-333011 | Email: shop.pfu2@gmail.com</p>
                       <p style="color: #9ca3af; font-size: 11px; margin: 3px 0;">House 56, Road 01, Block A, Niketan, Gulshan - 01, Dhaka - 1212</p>
                     </td>
                   </tr>

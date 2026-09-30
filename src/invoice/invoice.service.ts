@@ -101,9 +101,8 @@ export class InvoiceService {
       </td></tr>
       <tr><td style="border-top: 1px solid #d1202b;"><table class="fluid">
         <tr><td style="text-align: center; padding: 20px 0px 10px 0px;">
-          <p>09678-114411, 01613-333011 (whatsapp) | shop.pfu2@gmail.com | www.pfu2.com</p>
+          <p>09678882888, 01613-333011 (whatsapp) | shop.pfu2@gmail.com | www.pfu2.com</p>
         </td></tr></table></td></tr>`;
-
     html += `</table></body></html>`;
     return html;
   }
