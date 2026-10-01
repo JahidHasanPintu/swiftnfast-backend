@@ -566,8 +566,22 @@ export class CartService {
     cart.tax = totals.tax;
     cart.shippingBdt = totals.shippingBdt;
     cart.totalPrice = totals.totalPrice;
+    // An emptied cart must leave the admin price-request queue, otherwise a
+    // ghost 0-item row lingers in RequestedCarts and occupies a slot.
+    if (items.length === 0) this.resetRequestState(cart);
     await cart.save();
     return this.enrich(cart);
+  }
+
+  /**
+   * Clears the price-request flags so a cart that no longer has any items is
+   * excluded from GET /cart/requested and re-requests sort back to the top by
+   * receiving a fresh `requestedAt`.
+   */
+  private resetRequestState(cart: any) {
+    cart.isRequested = false;
+    cart.requestedAt = undefined;
+    cart.isRead = false;
   }
 
   async clearCart(id: string) {
@@ -578,6 +592,7 @@ export class CartService {
     cart.tax = 0;
     cart.shippingBdt = 0;
     cart.totalPrice = toFixed2((cart.pfu2Charge || 0) + (cart.discount || 0));
+    this.resetRequestState(cart);
     await cart.save();
     return this.enrich(cart);
   }
@@ -590,6 +605,7 @@ export class CartService {
     cart.tax = 0;
     cart.shippingBdt = 0;
     cart.totalPrice = toFixed2((cart.pfu2Charge || 0) + (cart.discount || 0));
+    this.resetRequestState(cart);
     await cart.save();
     return this.enrich(cart);
   }
@@ -642,7 +658,12 @@ export class CartService {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 10;
     const skip = (page - 1) * limit;
-    const filter: Record<string, any> = { isRequested: true };
+    // 'items.0': { $exists: true } also drops legacy carts that were emptied
+    // before resetRequestState() existed, so they cannot linger in the queue.
+    const filter: Record<string, any> = {
+      isRequested: true,
+      'items.0': { $exists: true },
+    };
     if (query.userId) filter.userId = query.userId;
 
     const sort: Record<string, any> = { requestedAt: -1 };
@@ -680,7 +701,7 @@ export class CartService {
 
   async getRequestedCartCount() {
     const cartCount = await this.cartModel
-      .countDocuments({ isRequested: true })
+      .countDocuments({ isRequested: true, 'items.0': { $exists: true } })
       .exec();
     // orderCount mirrors pfu2: count of requested carts (no separate order notion here)
     const orderCount = cartCount;
@@ -689,7 +710,11 @@ export class CartService {
 
   async getUnreadPriceRequestCount(): Promise<number> {
     return this.cartModel
-      .countDocuments({ isRequested: true, isRead: false })
+      .countDocuments({
+        isRequested: true,
+        isRead: false,
+        'items.0': { $exists: true },
+      })
       .exec();
   }
 }
