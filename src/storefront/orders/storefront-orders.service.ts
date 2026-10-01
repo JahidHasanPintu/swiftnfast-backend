@@ -146,7 +146,9 @@ export class StorefrontOrdersService {
       // Pre-stock items are already BDT and are passed through untouched.
       const unitBdt = computeUnitBdt(item, rate);
       const shippingBdtValue = computeShippingBdt(item, rate);
-      const lineTotal = toFixed2((unitBdt + shippingBdtValue) * qty);
+      // Shipping is a flat per-line charge, so it is added once and never
+      // multiplied by quantity.
+      const lineTotal = toFixed2(unitBdt * qty + shippingBdtValue);
       orderGrandTotal += lineTotal;
 
       let productId;
@@ -210,7 +212,7 @@ export class StorefrontOrdersService {
         // Tax is already folded into itemPrice (tax is a rate on the source
         // price, not a separate money line), so no separate tax line applies.
         tax: 0,
-        shippingCostBdt: toFixed2(shippingBdtValue * qty),
+        shippingCostBdt: toFixed2(shippingBdtValue),
         pfu2Charge: 0,
         discount: toNumber(cart.discount),
         grandTotal: 0,

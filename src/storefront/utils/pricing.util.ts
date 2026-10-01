@@ -17,7 +17,9 @@
  * items are taxed; every other source is tax-free.
  *
  * Shipping is converted with the rate, never taxed, and ceiled like any other
- * BDT figure.
+ * BDT figure. It is a FLAT per-line charge: quantity does not multiply it, so
+ * one line of qty 1 and one line of qty 5 with the same shippingCost pay the
+ * same shipping.
  *
  * Pre-stock (`type !== "outside_order"`) items are already denominated in BDT,
  * so there is nothing to convert or ceil - they pass through untouched.
@@ -179,10 +181,11 @@ export function unitTaxBdt(item: BdtItem, rate: number): number {
   return Math.max(0, unitBdt(item, rate) - baseUnitBdt(item, rate));
 }
 
-/** Full line total in BDT with quantity applied. */
+/** Full line total in BDT with quantity applied. Shipping is a flat, per-line
+ * charge, so it is added once and never multiplied by quantity. */
 export function lineBdt(item: BdtItem, rate: number): number {
   const qty = toNum(item?.quantity) || 1;
-  return (unitBdt(item, rate) + shippingBdt(item, rate)) * qty;
+  return unitBdt(item, rate) * qty + shippingBdt(item, rate);
 }
 
 export interface ItemMoneyBreakdown {
@@ -192,9 +195,9 @@ export interface ItemMoneyBreakdown {
   basePriceBdt: number;
   /** The tax portion of `priceBdt`, in BDT. 0 for admin-set finalPrice. */
   taxBdt: number;
-  /** Shipping converted to BDT, never taxed. */
+  /** Shipping converted to BDT, never taxed. Flat per line (not per unit). */
   shippingBdt: number;
-  /** Whole-line total: (priceBdt + shippingBdt) x quantity. */
+  /** Whole-line total: (priceBdt x quantity) + shippingBdt. */
   lineTotalBdt: number;
 }
 
@@ -227,7 +230,7 @@ export function breakdownBdt(item: BdtItem, rate: number): ItemMoneyBreakdown {
     basePriceBdt,
     taxBdt,
     shippingBdt: ship,
-    lineTotalBdt: (priceBdt + ship) * qty,
+    lineTotalBdt: priceBdt * qty + ship,
   };
 }
 

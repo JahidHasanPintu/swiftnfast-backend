@@ -40,7 +40,8 @@ function toFixed2(n: number): number {
  * `itemPrice` is the tax-INCLUSIVE product price, `tax` is the tax portion of
  * it, and `shippingBdt` is converted-but-untaxed shipping, so the customer
  * summary can show product price / tax / shipping as three separate lines.
- * Discount is subtracted at the end.
+ * Shipping is flat per line (quantity does not apply to it). Discount is
+ * subtracted at the end.
  */
 function calculateCartTotals(
   items: any[],
@@ -56,7 +57,8 @@ function calculateCartTotals(
     const qty = Number(it?.quantity) || 0;
     basePriceBdt += b.basePriceBdt * qty;
     taxBdt += b.taxBdt * qty;
-    shippingBdt += b.shippingBdt * qty;
+    // Shipping is a flat per-line charge - never multiplied by quantity.
+    shippingBdt += b.shippingBdt;
   }
 
   const itemPrice = basePriceBdt + taxBdt;
@@ -375,7 +377,9 @@ export class CartService {
     cart.tax = totals.tax;
     cart.shippingBdt = totals.shippingBdt;
     cart.totalPrice = totals.totalPrice;
-    cart.isRead = false;
+    // A new item on an already-requested cart is new activity: push it back to
+    // the top of the admin queue instead of leaving it at its old position.
+    this.touchRequest(cart);
     await cart.save();
     return this.enrich(cart);
   }
@@ -475,6 +479,7 @@ export class CartService {
     cart.tax = totals.tax;
     cart.shippingBdt = totals.shippingBdt;
     cart.totalPrice = totals.totalPrice;
+    this.touchRequest(cart);
     await cart.save();
     return this.enrich(cart);
   }
@@ -510,6 +515,8 @@ export class CartService {
     cart.isRequested = body.isRequested === true;
     if (body.isRequested === true) {
       cart.requestedAt = new Date();
+      // Re-requesting an already-read cart must light the admin unread badge.
+      cart.isRead = false;
     }
     if (body.guestContact !== undefined) cart.guestContact = body.guestContact;
     await cart.save();
@@ -567,8 +574,10 @@ export class CartService {
     cart.shippingBdt = totals.shippingBdt;
     cart.totalPrice = totals.totalPrice;
     // An emptied cart must leave the admin price-request queue, otherwise a
-    // ghost 0-item row lingers in RequestedCarts and occupies a slot.
+    // ghost 0-item row lingers in RequestedCarts and occupies a slot. A cart
+    // that still has items counts as new activity and bubbles back to the top.
     if (items.length === 0) this.resetRequestState(cart);
+    else this.touchRequest(cart);
     await cart.save();
     return this.enrich(cart);
   }
@@ -582,6 +591,19 @@ export class CartService {
     cart.isRequested = false;
     cart.requestedAt = undefined;
     cart.isRead = false;
+  }
+
+  /**
+   * Records fresh customer activity on a cart that is ALREADY in the admin
+   * queue: refreshes `requestedAt` so it bubbles to the top of
+   * GET /cart/requested (sorted by requestedAt desc) and marks it unread.
+   * No-op for carts that have never been requested.
+   */
+  private touchRequest(cart: any) {
+    if (cart.isRequested) {
+      cart.requestedAt = new Date();
+      cart.isRead = false;
+    }
   }
 
   async clearCart(id: string) {

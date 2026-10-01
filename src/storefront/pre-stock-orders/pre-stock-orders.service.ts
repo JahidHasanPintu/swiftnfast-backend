@@ -90,8 +90,10 @@ export class PreStockOrdersService {
       }
       const rate = ratesCache[source];
 
-      const perUnit = unitBdt(item, rate) + shippingBdt(item, rate);
-      const total = Number((perUnit * qty).toFixed(2));
+      // Shipping is a flat per-line charge: added once, not multiplied by qty.
+      const total = Number(
+        (unitBdt(item, rate) * qty + shippingBdt(item, rate)).toFixed(2),
+      );
       grandTotal += total;
 
       items.push({
