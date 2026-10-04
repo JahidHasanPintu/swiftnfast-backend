@@ -184,8 +184,11 @@ export class CartController {
   /**
    * Validate a code against this basket's real server-side totals and, if it is
    * good, store the resulting discount on the basket.
+   *
+   * The `cart/` prefix is required: the controller is mounted at `api/v1`, so
+   * `:id/coupon` would register at `api/v1/:id/coupon` instead.
    */
-  @Post(':id/coupon')
+  @Post('cart/:id/coupon')
   @UseGuards(StorefrontOptionalAuthGuard)
   async applyCoupon(
     @Req() req: StorefrontRequest,
@@ -196,7 +199,7 @@ export class CartController {
     return { success: true, message: 'Coupon applied', ...result };
   }
 
-  @Delete(':id/coupon')
+  @Delete('cart/:id/coupon')
   @UseGuards(StorefrontOptionalAuthGuard)
   async removeCoupon(@Param('id') id: string) {
     const data = await this.cartService.removeCoupon(id);
