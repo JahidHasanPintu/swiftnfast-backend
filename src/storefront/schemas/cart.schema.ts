@@ -54,7 +54,18 @@ export const CartItemSchema = new mongoose.Schema(
 export const CartSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
-    guestToken: { type: String, unique: true, sparse: true },
+    guestToken: { type: String },
+    // Which storefront basket this document is. A customer has at most one of
+    // each: 'cart' holds ready-stock catalogue products (ordinary ecommerce,
+    // invisible to the admin price-request queue) and 'quote' holds
+    // customer-supplied outside_order items awaiting an admin final price.
+    // Keeping them as separate documents is what lets a customer hold a cart
+    // AND a quote at the same time.
+    kind: {
+      type: String,
+      enum: ['cart', 'quote'],
+      default: 'cart',
+    },
     guestContact: { type: String },
     isRequested: { type: Boolean, default: false },
     isRead: { type: Boolean, default: false },
@@ -66,14 +77,20 @@ export const CartSchema = new mongoose.Schema(
     // show product price / tax / shipping as three distinct lines.
     shippingBdt: { type: Number, default: 0 },
     pfu2Charge: { type: Number, default: 0 },
-    discount: { type: Number, default: 0 },
+    discount: { type: Number, default: 0 }, // money taken off by a coupon, BDT
+    couponCode: { type: String }, // set while a coupon is applied
     totalPrice: { type: Number, default: 0 },
     updatedBy: { type: String },
   },
   { timestamps: true },
 );
-CartSchema.index({ userId: 1 });
-CartSchema.index({ guestToken: 1 });
-CartSchema.index({ isRequested: 1 });
+CartSchema.index({ userId: 1, kind: 1 });
+// One basket per kind per guest. `sparse` keeps user carts (no guestToken)
+// out of the index entirely.
+CartSchema.index(
+  { guestToken: 1, kind: 1 },
+  { unique: true, sparse: true },
+);
+CartSchema.index({ kind: 1, isRequested: 1 });
 
 export default CartSchema;

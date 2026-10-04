@@ -38,9 +38,13 @@ export interface CartItem {
   shippingBdt?: number | null; // converted, never taxed
 }
 
+export type BasketKind = 'cart' | 'quote';
+
 export interface Cart {
   userId?: any;
   guestToken?: string;
+  /** 'cart' = ready-stock catalogue products, 'quote' = outside_order items. */
+  kind?: BasketKind;
   guestContact?: string;
   isRequested?: boolean;
   isRead?: boolean;
@@ -50,8 +54,9 @@ export interface Cart {
   tax?: number; // tax portion of itemPrice, BDT
   /** Converted-but-untaxed shipping total, BDT. */
   shippingBdt?: number;
-  pfu2Charge?: number;
-  discount?: number;
+pfu2Charge?: number;
+discount?: number;
+couponCode?: string;
   totalPrice?: number;
   updatedBy?: string;
   shippingAddress?: any;

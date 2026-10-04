@@ -36,9 +36,12 @@ export const PreStockOrderSchema = new mongoose.Schema(
 
     itemPrice: { type: Number, default: 0 },
     tax: { type: Number, default: 0 },
-    pfu2Charge: { type: Number, default: 0 },
-    discount: { type: Number, default: 0 },
-    grandTotal: { type: Number, default: 0 },
+pfu2Charge: { type: Number, default: 0 },
+discount: { type: Number, default: 0 },
+// Copied from the basket at checkout so the whole order can be reported on
+// without having to look back at the per-item value.
+couponCode: { type: String },
+grandTotal: { type: Number, default: 0 },
 
     shippingAddress: { type: mongoose.Schema.Types.Mixed },
     billingAddress: { type: mongoose.Schema.Types.Mixed },

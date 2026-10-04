@@ -8,6 +8,7 @@ import { PartnersModule } from './partners/partners.module';
 import { SettingsModule } from './settings/settings.module';
 import { StorefrontUsersModule } from './users/storefront-users.module';
 import { CartModule } from './cart/cart.module';
+import { CouponsModule } from './coupons/coupons.module';
 import { AddressModule } from './addresses/address.module';
 import { PaymentModule } from './payment/payment.module';
 import { PaymentMethodModule } from './payment-methods/payment-method.module';
@@ -29,6 +30,7 @@ import { NotificationModule } from './notifications/notification.module';
     SettingsModule,
     StorefrontUsersModule,
     CartModule,
+    CouponsModule,
     AddressModule,
     PaymentModule,
     PaymentMethodModule,

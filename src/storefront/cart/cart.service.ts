@@ -6,9 +6,10 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import * as mongoose from 'mongoose';
 import { Model } from 'mongoose';
-import { CartDocument } from '../interfaces/cart.interface';
+import { CartDocument, BasketKind } from '../interfaces/cart.interface';
 import { generateImageUrl } from '../utils/image-url.util';
 import { SettingsService } from '../settings/settings.service';
+import { CouponsService } from '../coupons/coupons.service';
 import {
   breakdownBdt,
   moneyFieldsFor,
@@ -79,6 +80,7 @@ export class CartService {
     @InjectModel('Customer') private readonly userModel: Model<any>,
     @InjectModel('Product') private readonly productModel: Model<any>,
     private readonly settingsService: SettingsService,
+    private readonly couponsService: CouponsService,
   ) {}
 
   /**
@@ -217,6 +219,8 @@ export class CartService {
     const outsideItems = enrichedItems.filter(
       (i) => i.type === 'outside_order',
     );
+    // A quote is only orderable once an admin has priced every line. A cart of
+    // ready-stock products carries its own price, so it is always ready.
     const readyToOrder =
       outsideItems.length === 0 ||
       outsideItems.every((i) => i.priceManuallyUpdated === true);
@@ -224,49 +228,55 @@ export class CartService {
     return {
       ...cart,
       id: cart._id,
+      kind: cart.kind || 'cart',
       user,
       items: enrichedItems,
       cartItemsCount: enrichedItems.length,
       readyToOrder,
       isPriceUpdated: readyToOrder,
+      // Surfaced so the frontend can show which coupon is on the basket and
+      // whether the order will end up fully discounted.
+      couponCode: cart.couponCode || undefined,
+      couponDiscount: toFixed2(Number(cart.discount) || 0),
+      cartSubtotal: this.cartSubtotal(cart),
     };
   }
 
-  private async findOrCreate(identity: {
-    userId?: string;
-    guestToken?: string;
-  }) {
+  private async findOrCreate(
+    identity: {
+      userId?: string;
+      guestToken?: string;
+    },
+    kind: BasketKind = 'cart',
+  ) {
+    const base = {
+      kind,
+      items: [],
+      itemPrice: 0,
+      tax: 0,
+      shippingBdt: 0,
+      pfu2Charge: 0,
+      discount: 0,
+      totalPrice: 0,
+    };
     if (identity.userId) {
       let cart = await this.cartModel
-        .findOne({ userId: identity.userId })
+        .findOne({ userId: identity.userId, kind })
         .exec();
       if (!cart) {
-        cart = new this.cartModel({
-          userId: identity.userId,
-          items: [],
-          itemPrice: 0,
-          tax: 0,
-          pfu2Charge: 0,
-          discount: 0,
-          totalPrice: 0,
-        });
+        cart = new this.cartModel({ ...base, userId: identity.userId });
         await cart.save();
       }
       return cart;
     }
     if (identity.guestToken) {
       let cart = await this.cartModel
-        .findOne({ guestToken: identity.guestToken })
+        .findOne({ guestToken: identity.guestToken, kind })
         .exec();
       if (!cart) {
         cart = new this.cartModel({
+          ...base,
           guestToken: identity.guestToken,
-          items: [],
-          itemPrice: 0,
-          tax: 0,
-          pfu2Charge: 0,
-          discount: 0,
-          totalPrice: 0,
         });
         await cart.save();
       }
@@ -275,8 +285,11 @@ export class CartService {
     throw new BadRequestException('Missing user or guest token');
   }
 
-  async getMyCart(identity: { userId?: string; guestToken?: string }) {
-    const cart = await this.findOrCreate(identity);
+  async getMyCart(
+    identity: { userId?: string; guestToken?: string },
+    kind: BasketKind = 'cart',
+  ) {
+    const cart = await this.findOrCreate(identity, kind);
     return this.enrich(cart);
   }
 
@@ -303,6 +316,74 @@ export class CartService {
     await this.cartModel.findByIdAndDelete(id).exec();
   }
 
+  /**
+   * Everything the customer is charged for before any discount: the
+   * tax-inclusive product price plus shipping. This is the figure coupons are
+   * calculated against.
+   */
+  private cartSubtotal(cart: any): number {
+    return (
+      toFixed2(Number(cart?.itemPrice || 0) + Number(cart?.shippingBdt || 0))
+    );
+  }
+
+  /**
+   * Apply a coupon to a basket. The discount lands on `cart.discount`, which
+   * `calculateCartTotals` already subtracts, so every later reprice (quantity
+   * change, removal) keeps the discount intact.
+   *
+   * Nothing is recorded against the coupon here - a use is only counted once an
+   * order is actually placed.
+   */
+  async applyCoupon(id: string, code: string) {
+    const cart = await this.getRawCart(id);
+    const items = parseItems(cart.items);
+
+    if (items.length === 0) {
+      throw new BadRequestException('Cannot apply a coupon to an empty basket');
+    }
+
+    const subtotal = this.cartSubtotal(cart);
+    const resolved = await this.couponsService.resolve(code, subtotal);
+
+    cart.couponCode = resolved.coupon.code;
+    cart.discount = resolved.discount;
+
+    // Recompute through the canonical pipeline so totalPrice stays consistent
+    // with the discount we just stored.
+    const totals = await this.applyPricing(cart, items);
+    cart.itemPrice = totals.itemPrice;
+    cart.tax = totals.tax;
+    cart.shippingBdt = totals.shippingBdt;
+    cart.totalPrice = totals.totalPrice;
+
+    await cart.save();
+    return {
+      cart: await this.enrich(cart),
+      discount: resolved.discount,
+      subtotal: resolved.subtotal,
+      payable: resolved.payable,
+      isFreeOrder: resolved.isFreeOrder,
+    };
+  }
+
+  async removeCoupon(id: string) {
+    const cart = await this.getRawCart(id);
+    const items = parseItems(cart.items);
+
+    cart.couponCode = undefined;
+    cart.discount = 0;
+
+    const totals = await this.applyPricing(cart, items);
+    cart.itemPrice = totals.itemPrice;
+    cart.tax = totals.tax;
+    cart.shippingBdt = totals.shippingBdt;
+    cart.totalPrice = totals.totalPrice;
+
+    await cart.save();
+    return this.enrich(cart);
+  }
+
   async addItem(
     identity: { userId?: string; guestToken?: string },
     body: {
@@ -323,8 +404,11 @@ export class CartService {
       totalEstimatedPrice?: number;
     },
   ) {
-    const cart = await this.findOrCreate(identity);
     const type = body.type || 'product';
+    // The item type alone decides which basket this lands in, so the client
+    // never has to say: outside_order -> quote, everything else -> cart.
+    const kind: BasketKind = type === 'outside_order' ? 'quote' : 'cart';
+    const cart = await this.findOrCreate(identity, kind);
     if (type === 'outside_order') {
       if (!body.productId)
         throw new BadRequestException('Product ID is required');
@@ -619,8 +703,8 @@ export class CartService {
     return this.enrich(cart);
   }
 
-  async clearUserCart(userId: string) {
-    const cart = await this.cartModel.findOne({ userId }).exec();
+  async clearUserCart(userId: string, kind: BasketKind = 'cart') {
+    const cart = await this.cartModel.findOne({ userId, kind }).exec();
     if (!cart) throw new NotFoundException('Cart not found');
     cart.items = [];
     cart.itemPrice = 0;
@@ -636,53 +720,67 @@ export class CartService {
     await this.cartModel.findByIdAndDelete(id).exec();
   }
 
+  /**
+   * Fold a guest's baskets into the signed-in customer's. Done per kind so a
+   * guest cart and a guest quote never collapse into one document.
+   */
   async mergeGuestToUser(userId: string, guestToken?: string) {
     if (!guestToken)
       throw new BadRequestException('Missing user ID or guest token');
-    const guestCart = await this.cartModel.findOne({ guestToken }).exec();
-    if (!guestCart) return;
-    const guestItems = parseItems(guestCart.items);
 
-    const userCart = await this.cartModel.findOne({ userId }).exec();
-    if (!userCart) {
-      guestCart.userId = userId as any;
-      guestCart.guestToken = undefined as any;
-      await guestCart.save();
-      return;
-    }
+    for (const kind of ['cart', 'quote'] as BasketKind[]) {
+      const guestCart = await this.cartModel
+        .findOne({ guestToken, kind })
+        .exec();
+      if (!guestCart) continue;
+      const guestItems = parseItems(guestCart.items);
 
-    const userItems = parseItems(userCart.items);
-    for (const gItem of guestItems) {
-      const type = gItem.type || 'product';
-      const idx = userItems.findIndex(
-        (it: any) =>
-          String(it.productId) === String(gItem.productId) &&
-          (it.type || 'product') === type,
-      );
-      if (idx >= 0) {
-        userItems[idx].quantity =
-          Number(userItems[idx].quantity) + Number(gItem.quantity);
-      } else {
-        userItems.push(gItem);
+      const userCart = await this.cartModel
+        .findOne({ userId, kind })
+        .exec();
+      if (!userCart) {
+        guestCart.userId = userId as any;
+        guestCart.guestToken = undefined as any;
+        await guestCart.save();
+        continue;
       }
+
+      const userItems = parseItems(userCart.items);
+      for (const gItem of guestItems) {
+        const type = gItem.type || 'product';
+        const idx = userItems.findIndex(
+          (it: any) =>
+            String(it.productId) === String(gItem.productId) &&
+            (it.type || 'product') === type,
+        );
+        if (idx >= 0) {
+          userItems[idx].quantity =
+            Number(userItems[idx].quantity) + Number(gItem.quantity);
+        } else {
+          userItems.push(gItem);
+        }
+      }
+      const totals = await this.applyPricing(userCart, userItems);
+      userCart.items = userItems;
+      userCart.itemPrice = totals.itemPrice;
+      userCart.tax = totals.tax;
+      userCart.shippingBdt = totals.shippingBdt;
+      userCart.totalPrice = totals.totalPrice;
+      await userCart.save();
+      await guestCart.deleteOne();
     }
-    const totals = await this.applyPricing(userCart, userItems);
-    userCart.items = userItems;
-    userCart.itemPrice = totals.itemPrice;
-    userCart.tax = totals.tax;
-    userCart.shippingBdt = totals.shippingBdt;
-    userCart.totalPrice = totals.totalPrice;
-    await userCart.save();
-    await guestCart.deleteOne();
   }
 
   async getRequestedCarts(query: Record<string, any> = {}) {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 10;
     const skip = (page - 1) * limit;
-    // 'items.0': { $exists: true } also drops legacy carts that were emptied
+    // 'items.0': { $exists: true } also drops legacy baskets that were emptied
     // before resetRequestState() existed, so they cannot linger in the queue.
+    // Only quotes belong here: a ready-stock cart is ordinary ecommerce and is
+    // never a price request.
     const filter: Record<string, any> = {
+      kind: 'quote',
       isRequested: true,
       'items.0': { $exists: true },
     };
@@ -699,10 +797,10 @@ export class CartService {
       this.cartModel.countDocuments(filter).exec(),
     ]);
 
-    // mark unread requested carts as read
+    // mark unread requested quotes as read
     await this.cartModel
       .updateMany(
-        { isRequested: true, isRead: false },
+        { kind: 'quote', isRequested: true, isRead: false },
         { $set: { isRead: true } },
       )
       .exec();
@@ -723,9 +821,13 @@ export class CartService {
 
   async getRequestedCartCount() {
     const cartCount = await this.cartModel
-      .countDocuments({ isRequested: true, 'items.0': { $exists: true } })
+      .countDocuments({
+        kind: 'quote',
+        isRequested: true,
+        'items.0': { $exists: true },
+      })
       .exec();
-    // orderCount mirrors pfu2: count of requested carts (no separate order notion here)
+    // orderCount mirrors pfu2: count of requested quotes (no separate order notion here)
     const orderCount = cartCount;
     return { cartCount, orderCount };
   }
@@ -733,6 +835,7 @@ export class CartService {
   async getUnreadPriceRequestCount(): Promise<number> {
     return this.cartModel
       .countDocuments({
+        kind: 'quote',
         isRequested: true,
         isRead: false,
         'items.0': { $exists: true },

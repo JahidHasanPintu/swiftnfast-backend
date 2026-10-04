@@ -15,6 +15,7 @@
     "migrate:ceil-weight-charge": "ts-node src/migrations/ceil-product-weight-charge.ts",
     "migrate:backfill-cart-requested-at": "ts-node src/migrations/backfill-cart-requested-at.ts",
     "migrate:reset-usa-sales-tax": "ts-node src/migrations/reset-usa-sales-tax-to-rate.ts",
+    "migrate:split-cart-into-cart-and-quote": "ts-node src/migrations/split-cart-into-cart-and-quote.ts",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",

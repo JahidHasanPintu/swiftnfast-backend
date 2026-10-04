@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { DatabaseSchemasModule } from 'src/database/schemas.module';
 import { CartModule } from '../cart/cart.module';
+import { CouponsModule } from '../coupons/coupons.module';
 import { NotificationModule } from '../notifications/notification.module';
 import { SettingsModule } from '../settings/settings.module';
 import { StorageModule } from 'src/storage/storage.module';
@@ -11,6 +12,7 @@ import { PreStockOrdersService } from './pre-stock-orders.service';
   imports: [
     DatabaseSchemasModule,
     CartModule,
+    CouponsModule,
     NotificationModule,
     SettingsModule,
     StorageModule,

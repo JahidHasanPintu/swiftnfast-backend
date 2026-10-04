@@ -41,6 +41,16 @@ export class CartController {
     return { userId: req.user?.userId, guestToken: req.guestToken };
   }
 
+  /**
+   * Which basket a customer-facing endpoint addresses. `?kind=quote` reads the
+   * pre-order quote; anything else (including no param) is the ordinary cart.
+   */
+  private kind(query: any): 'cart' | 'quote' {
+    return String(query?.kind || '').toLowerCase() === 'quote'
+      ? 'quote'
+      : 'cart';
+  }
+
   // NOTE: static path segments are declared before `:param` routes so
   // Express resolves them correctly (e.g. /cart/requested vs /cart/:id).
 
@@ -144,8 +154,11 @@ export class CartController {
 
   @Get('mycart')
   @UseGuards(StorefrontOptionalAuthGuard)
-  async myCart(@Req() req: StorefrontRequest) {
-    const data = await this.cartService.getMyCart(this.identity(req));
+  async myCart(@Req() req: StorefrontRequest, @Query() query: any) {
+    const data = await this.cartService.getMyCart(
+      this.identity(req),
+      this.kind(query),
+    );
     return { success: true, data };
   }
 
@@ -160,15 +173,41 @@ export class CartController {
   @UseGuards(StorefrontAuthGuard)
   async merge(@Req() req: StorefrontRequest) {
     await this.cartService.mergeGuestToUser(req.user!.userId, req.guestToken);
-    const data = await this.cartService.getMyCart({ userId: req.user!.userId });
+    const data = await this.cartService.getMyCart({
+      userId: req.user!.userId,
+    });
     return { success: true, message: 'Cart merged successfully', data };
+  }
+
+  // ---- Coupons ------------------------------------------------------------
+
+  /**
+   * Validate a code against this basket's real server-side totals and, if it is
+   * good, store the resulting discount on the basket.
+   */
+  @Post(':id/coupon')
+  @UseGuards(StorefrontOptionalAuthGuard)
+  async applyCoupon(
+    @Req() req: StorefrontRequest,
+    @Param('id') id: string,
+    @Body() body: any,
+  ) {
+    const result = await this.cartService.applyCoupon(id, body?.code);
+    return { success: true, message: 'Coupon applied', ...result };
+  }
+
+  @Delete(':id/coupon')
+  @UseGuards(StorefrontOptionalAuthGuard)
+  async removeCoupon(@Param('id') id: string) {
+    const data = await this.cartService.removeCoupon(id);
+    return { success: true, message: 'Coupon removed', data };
   }
 
   // singular `/cart/*` aliases matching the pfu2 contract exactly (§4)
   @Get('cart/mycart')
   @UseGuards(StorefrontOptionalAuthGuard)
-  async myCartAlias(@Req() req: StorefrontRequest) {
-    return this.myCart(req);
+  async myCartAlias(@Req() req: StorefrontRequest, @Query() query: any) {
+    return this.myCart(req, query);
   }
 
   @Post('cart/add-item')
@@ -185,8 +224,14 @@ export class CartController {
 
   @Delete('cart/user/:userId/clear')
   @UseGuards(StorefrontAuthGuard)
-  async clearUser(@Param('userId') userId: string) {
-    const data = await this.cartService.clearUserCart(userId);
+  async clearUser(
+    @Param('userId') userId: string,
+    @Query() query: any,
+  ) {
+    const data = await this.cartService.clearUserCart(
+      userId,
+      this.kind(query),
+    );
     return { success: true, message: 'Cart cleared successfully', data };
   }
 

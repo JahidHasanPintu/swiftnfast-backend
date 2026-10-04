@@ -6,9 +6,10 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import * as mongoose from 'mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { OrderService } from 'src/order/order.service';
 import { CartService } from '../cart/cart.service';
+import { CouponsService } from '../coupons/coupons.service';
 import { MailService } from '../mail/mail.service';
 import { generateImageUrl } from '../utils/image-url.util';
 import { EventsGateway } from '../../common/gateways/events.gateway';
@@ -52,6 +53,7 @@ export class StorefrontOrdersService {
     @InjectModel('Login') private readonly usersModel: Model<any>,
     @InjectModel('Product') private readonly productModel: Model<any>,
     @InjectModel('Payments') private readonly paymentModel: Model<any>,
+    @InjectModel('PreStockOrder') private readonly preStockOrderModel: Model<any>,
     private readonly ordersService: OrderService,
     private readonly cartService: CartService,
     private readonly mailService: MailService,
@@ -59,6 +61,7 @@ export class StorefrontOrdersService {
     private readonly notificationService: NotificationService,
     private readonly preStockOrdersService: PreStockOrdersService,
     private readonly settingsService: SettingsService,
+    private readonly couponsService: CouponsService,
   ) {}
 
   // Exchange rate for a country, preferring the admin-managed Settings value
@@ -88,13 +91,15 @@ export class StorefrontOrdersService {
     const cart = await this.cartService.getRawCart(body.cartId);
     const rawItems = (cart.items as any[]) || [];
 
-    // If cart has outside/URL products, use old Orders collection
-    // If cart has pre-stocked products, use new prestockorders collection
-    const hasOutsideProducts = rawItems.some(
-      (item: any) => item.type === 'outside_order',
-    );
+    // Cart and quote are separate documents, so `kind` is the authority here.
+    // The item check stays as a guard for rows written before `kind` existed.
+    // quote -> old Orders collection (orderType 'import')
+    // cart  -> new prestockorders collection
+    const hasOutsideProducts =
+      cart.kind === 'quote' ||
+      rawItems.some((item: any) => item.type === 'outside_order');
     if (!hasOutsideProducts && rawItems.length > 0) {
-      // Pre-stocked products → prestockorders collection
+      // Ready-stocked products -> prestockorders collection
       return this.preStockOrdersService.createOrder(body);
     }
 
@@ -200,7 +205,7 @@ export class StorefrontOrdersService {
         remainingAmount: lineTotal,
         orderNotes: item.notes,
         origin: productSourcedFrom || 'Bangladesh',
-        couponCode: item.promoCode,
+        couponCode: cart.couponCode || item.promoCode,
         ssImageUrl: item.ssImageUrl,
         status: 'PENDING',
         userId,
@@ -214,7 +219,7 @@ export class StorefrontOrdersService {
         tax: 0,
         shippingCostBdt: toFixed2(shippingBdtValue),
         pfu2Charge: 0,
-        discount: toNumber(cart.discount),
+        discount: 0,
         grandTotal: 0,
         shippingAddress: shipping,
         billingAddress: body.billing || cart.billingAddress || {},
@@ -229,43 +234,89 @@ export class StorefrontOrdersService {
       throw new BadRequestException('Cart is empty');
     }
 
-    await this.orderModel.insertMany(lineItems);
+    // The coupon was validated and stored on the basket when it was applied.
+    // Deduct it from the order total and work out what is actually collectable.
+    const discount = toFixed2(Math.min(toNumber(cart.discount), orderGrandTotal));
+    const payableTotal = toFixed2(Math.max(0, orderGrandTotal - discount));
+    // A coupon that covers the whole amount means there is nothing to charge,
+    // so the order is recorded as paid without ever touching the gateway.
+    const isFreeOrder = payableTotal <= 0;
 
-    const paymentMethod = (body.paymentMethod || 'BKASH').toUpperCase();
-    const advanceAmount = Math.min(
-      toNumber(body.advancePaymentData?.amount) || 0,
-      orderGrandTotal,
-    );
-    const totalAmount = orderGrandTotal;
+    // Spread the discount and the payment across the line items in proportion
+    // to their price, so per-line remaining amounts always add up to the order
+    // total. The last line absorbs the rounding remainder.
+    let discountAllocated = 0;
+    lineItems.forEach((item, idx) => {
+      const share =
+        idx === lineItems.length - 1
+          ? toFixed2(discount - discountAllocated)
+          : toFixed2(discount * (item.totalPrice / orderGrandTotal));
+      discountAllocated = toFixed2(discountAllocated + share);
+      item.discount = share;
+      item.payableTotal = toFixed2(item.totalPrice - share);
+    });
 
-    // If advance payment was made via bKash, split it across line items
-    // proportionally by their share of the grand total.
-    if (advanceAmount > 0) {
-      const bulk = lineItems.map((item) => {
-        const paid =
-          orderGrandTotal > 0
-            ? toFixed2(advanceAmount * (item.totalPrice / orderGrandTotal))
-            : 0;
-        const remaining = toFixed2(item.totalPrice - paid);
-        item.advancePayment = paid;
-        item.remainingAmount = remaining;
-        return {
-          updateOne: {
-            filter: {
-              orderId: item.orderId,
-              orderItemIndex: item.orderItemIndex,
-            },
-            update: {
-              $set: {
-                advancePayment: paid,
-                remainingAmount: remaining,
-              },
+    // Take the use BEFORE any write happens. The increment and the maxUse guard
+    // are one atomic update, so two customers racing for the last use cannot
+    // both win. If any write below fails the use is handed back, so a failed
+    // checkout never burns a use and never leaves half an order behind.
+    if (cart.couponCode) {
+      await this.couponsService.consume(cart.couponCode);
+    }
+
+    try {
+      await this.orderModel.insertMany(lineItems);
+
+    const paymentMethod = isFreeOrder
+      ? 'COUPON'
+      : (body.paymentMethod || 'BKASH').toUpperCase();
+    const advanceAmount = isFreeOrder
+      ? 0
+      : toFixed2(
+          Math.min(
+            toNumber(body.advancePaymentData?.amount) || 0,
+            payableTotal,
+          ),
+        );
+
+    // paid when nothing is owed or the advance covers the whole payable amount;
+    // partial when money is still outstanding.
+    const paymentStatus = isFreeOrder
+      ? 'paid'
+      : advanceAmount >= payableTotal && payableTotal > 0
+        ? 'paid'
+        : advanceAmount > 0
+          ? 'partial'
+          : 'pending';
+
+    // Split the advance payment across line items in proportion to their share
+    // of the amount actually payable.
+    const paymentBulk = lineItems.map((item, idx) => {
+      const paid =
+        isFreeOrder
+          ? 0
+          : idx === lineItems.length - 1
+            ? toFixed2(advanceAmount - item.advancePayment)
+            : toFixed2(advanceAmount * (item.payableTotal / payableTotal));
+      const remaining = toFixed2(item.payableTotal - paid);
+      item.advancePayment = paid;
+      item.remainingAmount = remaining;
+      return {
+        updateOne: {
+          filter: {
+            orderId: item.orderId,
+            orderItemIndex: item.orderItemIndex,
+          },
+          update: {
+            $set: {
+              advancePayment: paid,
+              remainingAmount: remaining,
             },
           },
-        };
-      });
-      await this.orderModel.bulkWrite(bulk);
-    }
+        },
+      };
+    });
+    await this.orderModel.bulkWrite(paymentBulk);
 
     // Persist customer-level totals matching the admin created-order structure
     // so admin order/lookup views can fall back to order.customer.grandTotal.
@@ -286,16 +337,35 @@ export class StorefrontOrdersService {
       orderId: orderNumber,
       method: paymentMethod.toLowerCase(),
       phoneNumber: shippingPhone || '',
-      transactionStatus: body.advancePaymentData?.trxID ? 'Completed' : 'pending',
-      statusMessage: body.advancePaymentData?.trxID ? 'Paid via online payment' : 'Awaiting payment confirmation',
-      amount: String(totalAmount),
-      paymentStatus: body.advancePaymentData?.trxID ? 'paid' : 'pending',
-      paymentSource: 'prestock',
+      transactionStatus: isFreeOrder
+        ? 'Completed'
+        : body.advancePaymentData?.trxID
+          ? 'Completed'
+          : 'pending',
+      statusMessage: isFreeOrder
+        ? 'Paid in full by coupon - no payment required'
+        : body.advancePaymentData?.trxID
+          ? 'Paid via online payment'
+          : 'Awaiting payment confirmation',
+      amount: String(payableTotal),
+      paymentStatus,
+      paymentSource: 'import',
       customerId: customer._id,
       cashPayment: 0,
       mfsPayment,
       bankPayment: null,
-    });
+      });
+    } catch (err) {
+      // Nothing was completed, so give the coupon use back and drop the
+      // partially written order lines to avoid a phantom order.
+      if (cart.couponCode) {
+        await this.couponsService.release(cart.couponCode);
+      }
+      await this.orderModel
+        .deleteMany({ orderNumber })
+        .catch(() => undefined);
+      throw err;
+    }
 
     await this.cartService.deleteById(body.cartId);
 
@@ -587,6 +657,13 @@ export class StorefrontOrdersService {
       const advancePayment = toFixed2(
         lines.reduce((s, l) => s + toNumber(l.advancePayment), 0),
       );
+      // Discount and coupon code are allocated across the line items, so they
+      // have to be summed back up to describe the order as a whole.
+      const discount = toFixed2(
+        lines.reduce((s, l) => s + toNumber(l.discount), 0),
+      );
+      const couponCode =
+        lines.find((l) => l.couponCode)?.couponCode || undefined;
       const payment = paymentByNumber.get(key);
       orders.push({
         _id: first._id,
@@ -606,12 +683,13 @@ export class StorefrontOrdersService {
         itemPrice: toNumber(first.itemPrice),
         tax: toNumber(first.tax),
         pfu2Charge: toNumber(first.pfu2Charge),
-        discount: toNumber(first.discount),
+        discount,
+        couponCode,
         totalPrice: grandTotal,
         grandTotal,
         advancePayment,
         totalAdvance: advancePayment,
-        remainingAmount: toFixed2(grandTotal - advancePayment),
+        remainingAmount: toFixed2(grandTotal - discount - advancePayment),
         customer: {
           customerId: first.customerId,
           name: first.customerName,
@@ -626,6 +704,14 @@ export class StorefrontOrdersService {
     return orders;
   }
 
+  /**
+   * Paginate over ORDERS, not over the line-item documents.
+   *
+   * One customer order is stored as one document per product line, so counting
+   * or paging the raw documents reports items, not orders: an order of three
+   * items used to read as "3 orders". The distinct orderNumber groups are
+   * paged first, then their lines are loaded and grouped for the response.
+   */
   async getMyOrders(
     userId: string,
     query: { page?: number; limit?: number; status?: string } = {},
@@ -636,20 +722,44 @@ export class StorefrontOrdersService {
     const filter: any = { userId };
     if (query.status) filter.status = query.status;
 
-    const docs = await this.orderModel
-      .find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .exec();
-    const total = await this.orderModel.countDocuments(filter).exec();
+    const [groups, counted] = await Promise.all([
+      this.orderModel
+        .aggregate([
+          { $match: filter },
+          { $group: { _id: '$orderNumber', createdAt: { $max: '$createdAt' } } },
+          { $sort: { createdAt: -1 } },
+          { $skip: skip },
+          { $limit: limit },
+        ])
+        .exec(),
+      this.orderModel
+        .aggregate([
+          { $match: filter },
+          { $group: { _id: '$orderNumber' } },
+          { $count: 'total' },
+        ])
+        .exec(),
+    ]);
 
-    return {
-      orders: await this.groupDocs(docs),
-      total,
-      page,
-      limit,
-    };
+    const numbers: string[] = groups.map((g: any) => String(g._id));
+    const total = counted[0]?.total || 0;
+
+    if (numbers.length === 0) {
+      return { orders: [], total, page, limit };
+    }
+
+    const docs = await this.orderModel
+      .find({ orderNumber: { $in: numbers } })
+      .exec();
+    const grouped = await this.groupDocs(docs);
+
+    // Keep the paged ordering rather than whatever order the lines loaded in.
+    const byNumber = new Map(grouped.map((o: any) => [o.orderNumber, o]));
+    const orders = numbers
+      .map((n) => byNumber.get(n))
+      .filter((o: any) => Boolean(o));
+
+    return { orders, total, page, limit };
   }
 
   async findAll(query: Record<string, any> = {}) {
@@ -732,6 +842,255 @@ export class StorefrontOrdersService {
       throw new NotFoundException(`Order with number ${orderNumber} not found`);
     const grouped = await this.groupDocs(docs);
     return grouped[0];
+  }
+
+  // -------------------------------------------------------------------------
+  // Customer account: both order types in one place
+  // -------------------------------------------------------------------------
+  //
+  // A customer can end up with two kinds of order:
+  //   pre-order / import - the `Orders` collection, one document per line
+  //   pre-stock          - the `prestockorders` collection, one document per order
+  // They are separate collections with different shapes, so they are normalised
+  // here into one list. Without this the account page can only ever show one of
+  // the two.
+
+  /** Normalise a prestockorders document into the import-order shape. */
+  private normalisePreStockOrder(order: any): any {
+    const items = (order.items || []).map((item: any) => ({
+      productId: item.productId,
+      product: item.productImageUrl
+        ? { images: [item.productImageUrl], name: item.prodDesc }
+        : null,
+      name: item.prodDesc,
+      // Prestock lines store the entered unit price; `finalPrice` is what the
+      // import-order shape exposes to the storefront.
+      price: item.uniPrice,
+      finalPrice: item.totalPrice,
+      quantity: item.quantity,
+      color: item.color,
+      size: item.size,
+      notes: item.orderNotes,
+      productSourcedFrom: item.productSourcedFrom,
+      couponCode: item.couponCode,
+      status: item.status,
+      totalPrice: item.totalPrice,
+    }));
+
+    const grandTotal = toFixed2(order.grandTotal);
+    const discount = toFixed2(order.discount);
+    const advancePayment = toFixed2(order.advancePayment);
+
+    return {
+      _id: order._id,
+      id: order.orderNumber,
+      orderNumber: order.orderNumber,
+      // `prestock` is what the storefront uses to tell the two apart.
+      orderType: 'prestock',
+      source: 'prestock',
+      status: order.status,
+      paymentStatus: order.paymentStatus || 'pending',
+      paymentMethod: order.paymentMethod,
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+      userId: order.userId,
+      isGuest: order.isGuest,
+      guestEmail: order.guestEmail,
+      guestContact: order.guestContact,
+      itemPrice: toNumber(order.itemPrice),
+      tax: toNumber(order.tax),
+      pfu2Charge: toNumber(order.pfu2Charge),
+      discount,
+      couponCode: order.couponCode || undefined,
+      grandTotal,
+      totalPrice: grandTotal,
+      advancePayment,
+      totalAdvance: advancePayment,
+      remainingAmount: toFixed2(grandTotal - discount - advancePayment),
+      customer: {
+        customerId: order.userId,
+        name: order.customerName,
+        contactNo: order.contactNumber,
+      },
+      shippingAddress: order.shippingAddress,
+      billingAddress: order.billingAddress,
+      items,
+    };
+  }
+
+  /**
+   * Everything a signed-in customer has ordered, newest first, across both
+   * collections, plus the aggregate figures the account dashboard shows.
+   */
+  async getMyAccountOrders(
+    userId: string,
+    query: { type?: string; page?: number; limit?: number } = {},
+  ) {
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    // Both lists are fetched in full (a customer's own order history is
+    // small) so the analytics below cover the whole history, not one page.
+    const wantPreStock = !query.type || query.type === 'prestock';
+    const wantImport = !query.type || query.type === 'import';
+
+    const [importResult, preStockDocs] = await Promise.all([
+      wantImport ? this.getMyOrders(userId, { page: 1, limit: 10000 }) : null,
+      wantPreStock
+        ? this.preStockOrderModel
+            .find({ userId })
+            .sort({ createdAt: -1 })
+            .lean()
+            .exec()
+        : [],
+    ]);
+
+    const importOrders: any[] = (importResult?.orders || []).map((o: any) => ({
+      ...o,
+      source: 'import',
+    }));
+    const preStockOrders: any[] = (preStockDocs || []).map((o: any) =>
+      this.normalisePreStockOrder(o),
+    );
+
+    const all = [...importOrders, ...preStockOrders].sort(
+      (a, b) =>
+        new Date(b.createdAt || 0).getTime() -
+        new Date(a.createdAt || 0).getTime(),
+    );
+
+    const paged = all.slice(skip, skip + limit);
+
+    return {
+      orders: paged,
+      total: all.length,
+      page,
+      limit,
+      analytics: this.buildOrderAnalytics(all),
+    };
+  }
+
+  /**
+   * Aggregate figures for the account dashboard.
+   *
+   * Every count here is a count of ORDERS, never of line items. `itemCount` is
+   * reported separately so the two can never be confused for one another.
+   */
+  buildOrderAnalytics(orders: any[]) {
+    const pendingStatuses = [
+      'pending',
+      'confirmed',
+      'processing',
+      'uswarehouse',
+      'bdoffice',
+      'partial_delivered',
+    ];
+    const deliveredStatuses = ['shipped', 'fully_delivered', 'delivered'];
+    const cancelledStatuses = ['cancelled', 'canceled'];
+
+    let activeOrders = 0;
+    let deliveredOrders = 0;
+    let cancelledOrders = 0;
+    let awaitingPaymentOrders = 0;
+    let totalSpent = 0;
+    let totalDiscount = 0;
+    let itemCount = 0;
+    let preStockCount = 0;
+    let preOrderCount = 0;
+
+    for (const order of orders) {
+      const status = String(order.status || '').toLowerCase();
+      const paid = toNumber(order.advancePayment);
+      const discount = toNumber(order.discount);
+
+      // An order is "active" while it is progressing: not delivered, not
+      // cancelled. This is what the dashboard's ACTIVE ORDERS tile shows.
+      if (cancelledStatuses.includes(status)) {
+        cancelledOrders += 1;
+      } else if (deliveredStatuses.includes(status)) {
+        deliveredOrders += 1;
+      } else {
+        // Everything else - pending, confirmed, processing, in warehouse - is
+        // still on its way to the customer.
+        activeOrders += 1;
+      }
+
+      if (String(order.paymentStatus || '').toLowerCase() !== 'paid') {
+        awaitingPaymentOrders += 1;
+      }
+
+      totalSpent += paid;
+      totalDiscount += discount;
+      itemCount += (order.items || []).length;
+
+      if (order.orderType === 'prestock' || order.source === 'prestock') {
+        preStockCount += 1;
+      } else {
+        preOrderCount += 1;
+      }
+    }
+
+    return {
+      totalOrders: orders.length,
+      activeOrders,
+      deliveredOrders,
+      cancelledOrders,
+      awaitingPaymentOrders,
+      preStockOrders: preStockCount,
+      preOrders: preOrderCount,
+      // Deliberately separate from totalOrders so the UI never renders an item
+      // count where an order count is meant.
+      itemCount,
+      totalSpent: toFixed2(totalSpent),
+      totalDiscount: toFixed2(totalDiscount),
+    };
+  }
+
+  /**
+   * One order by number, from either collection, for the tracking page.
+   * Pre-stock order numbers are prefixed `PS-`, but the collection is probed
+   * anyway so an older or hand-created number still resolves.
+   */
+  async getMyAccountOrderByNumber(orderNumber: string, userId?: string) {
+    // A signed-in customer may only ever see their own order. The guard is
+    // optional at the route level so guests can still track by number, so the
+    // ownership check has to happen here.
+    const ownedBy = userId ? { userId: new Types.ObjectId(userId) } : null;
+
+    if (ownedBy) {
+      const preStock = await this.preStockOrderModel
+        .findOne({ orderNumber, ...ownedBy })
+        .lean()
+        .exec();
+      if (preStock) return this.normalisePreStockOrder(preStock);
+
+      const docs = await this.orderModel
+        .find({ orderNumber, ...ownedBy })
+        .exec();
+      if (docs.length) {
+        const grouped = await this.groupDocs(docs);
+        return { ...grouped[0], source: 'import' };
+      }
+
+      // Do not confirm the order exists for somebody else.
+      throw new NotFoundException(
+        `Order with number ${orderNumber} not found`,
+      );
+    }
+
+    const preStock = await this.preStockOrderModel
+      .findOne({ orderNumber })
+      .lean()
+      .exec();
+    if (preStock) return this.normalisePreStockOrder(preStock);
+
+    const docs = await this.orderModel.find({ orderNumber }).exec();
+    if (!docs.length) {
+      throw new NotFoundException(`Order with number ${orderNumber} not found`);
+    }
+    const grouped = await this.groupDocs(docs);
+    return { ...grouped[0], source: 'import' };
   }
 
   // -------------------------------------------------------------------------

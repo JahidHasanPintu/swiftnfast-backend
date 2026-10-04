@@ -4,6 +4,7 @@ import { OrderModule } from 'src/order/order.module';
 import { StorageModule } from 'src/storage/storage.module';
 import { StorefrontAuthModule } from '../auth/storefront-auth.module';
 import { CartModule } from '../cart/cart.module';
+import { CouponsModule } from '../coupons/coupons.module';
 import { MailModule } from '../mail/mail.module';
 import { NotificationModule } from '../notifications/notification.module';
 import { PreStockOrdersModule } from '../pre-stock-orders/pre-stock-orders.module';
@@ -16,6 +17,7 @@ import { StorefrontOrdersController } from './storefront-orders.controller';
     DatabaseSchemasModule,
     OrderModule,
     CartModule,
+    CouponsModule,
     StorefrontAuthModule,
     StorageModule,
     MailModule,

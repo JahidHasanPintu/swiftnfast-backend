@@ -34,10 +34,13 @@ export class StorefrontOrdersController {
   ) {}
 
   // ---- Pre-stock orders --------------------------------------------------
+  // Goes through the router, not PreStockOrdersService directly: the service
+  // only knows the prestockorders collection, so a basket of outside_order
+  // items would be filed there instead of as an import order.
   @Post('orders')
   @UseGuards(StorefrontOptionalAuthGuard)
   async create(@Req() req: StorefrontRequest, @Body() body: any) {
-    const order = await this.preStockOrdersService.createOrder({
+    const order = await this.ordersService.createPreStockOrder({
       userId: req.user?.userId,
       ...body,
     });
@@ -69,6 +72,54 @@ export class StorefrontOrdersController {
           result.total,
       },
     };
+  }
+
+  /**
+   * Everything the signed-in customer has ordered - ready-stock pre-stock
+   * orders AND pre-order/import orders in one list - plus the dashboard
+   * analytics. Counts are orders, not line items.
+   */
+  @Get('account/orders')
+  @UseGuards(StorefrontAuthGuard)
+  async myAccountOrders(@Req() req: StorefrontRequest, @Query() query: any) {
+    const result = await this.ordersService.getMyAccountOrders(
+      req.user!.userId,
+      query,
+    );
+    return {
+      success: true,
+      message: 'Orders retrieved successfully',
+      data: result.orders,
+      analytics: result.analytics,
+      meta: {
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+        totalPages: Math.ceil(result.total / result.limit),
+        hasNextPage: result.page * result.limit < result.total,
+      },
+    };
+  }
+
+  /**
+   * Single order for the tracking page, resolved from either collection so a
+   * `PS-...` pre-stock number tracks exactly like a pre-order number.
+   *
+   * The guard is optional so a guest can still track with just an order number.
+   * When a customer IS signed in the service restricts the lookup to their own
+   * orders, so guessing another order number reveals nothing.
+   */
+  @Get('account/orders/:orderNumber')
+  @UseGuards(StorefrontOptionalAuthGuard)
+  async myAccountOrderByNumber(
+    @Param('orderNumber') orderNumber: string,
+    @Req() req: StorefrontRequest,
+  ) {
+    const data = await this.ordersService.getMyAccountOrderByNumber(
+      orderNumber,
+      req.user?.userId,
+    );
+    return { success: true, message: 'Order retrieved successfully', data };
   }
 
   // Admin listing (SwiftNFast admin JWT): filters status/userId/paymentMethod/

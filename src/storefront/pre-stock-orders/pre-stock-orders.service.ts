@@ -7,6 +7,7 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { CartService } from '../cart/cart.service';
+import { CouponsService } from '../coupons/coupons.service';
 import { EventsGateway } from '../../common/gateways/events.gateway';
 import { NotificationService } from '../notifications/notification.service';
 import { SettingsService } from '../settings/settings.service';
@@ -29,6 +30,7 @@ export class PreStockOrdersService {
     private readonly eventsGateway: EventsGateway,
     private readonly notificationService: NotificationService,
     private readonly settingsService: SettingsService,
+    private readonly couponsService: CouponsService,
   ) {}
 
   private async getExchangeRate(source: string): Promise<number> {
@@ -110,12 +112,32 @@ export class PreStockOrdersService {
         productImageUrl: item.ssImageUrl || undefined,
         productSourcedFrom: item.productSourcedFrom,
         orderNotes: item.notes,
-        couponCode: item.promoCode,
+        couponCode: cart.couponCode || item.promoCode,
       });
     }
 
     grandTotal = Number(grandTotal.toFixed(2));
-    const advanceAmount = body.advancePaymentData?.amount || 0;
+
+    // The coupon was validated and stored on the basket when it was applied.
+    // Deduct it here and work out what is actually collectable.
+    const discount = Math.min(
+      toNumber(cart.discount),
+      grandTotal,
+    );
+    const payableTotal = Number(Math.max(0, grandTotal - discount).toFixed(2));
+    // A coupon that covers the whole amount means there is nothing to charge,
+    // so the order is recorded as paid without ever touching the gateway.
+    const isFreeOrder = payableTotal <= 0;
+
+    // Never trust an advance payment larger than what is actually owed.
+    const advanceAmount = isFreeOrder
+      ? 0
+      : Number(
+          Math.min(
+            Number(body.advancePaymentData?.amount) || 0,
+            payableTotal,
+          ).toFixed(2),
+        );
 
     // Distribute advance payment across items
     if (advanceAmount > 0) {
@@ -126,7 +148,17 @@ export class PreStockOrdersService {
       }
     }
 
-    const paymentMethod = (body.paymentMethod || 'bkash').toLowerCase();
+    // Nothing is left to collect once the coupon has covered the order.
+    if (isFreeOrder) {
+      for (const item of items) {
+        item.advancePayment = 0;
+        item.remainingAmount = 0;
+      }
+    }
+
+    const paymentMethod = isFreeOrder
+      ? 'coupon'
+      : (body.paymentMethod || 'bkash').toLowerCase();
 
     // Build MFS payment data
     const mfsPayment = body.advancePaymentData?.trxID
@@ -137,45 +169,81 @@ export class PreStockOrdersService {
         }
       : undefined;
 
-    const order = await this.orderModel.create({
-      orderNumber,
-      userId: body.userId || undefined,
-      isGuest: body.isGuest === true || !body.userId,
-      guestEmail: shippingEmail,
-      guestContact: body.guestContact || shippingPhone,
-      customerName: shippingName,
-      contactNumber: shippingPhone,
-      emailAddress: shippingEmail,
-      items,
-      itemPrice: toNumber(cart.itemPrice),
-      tax: toNumber(cart.tax),
-      pfu2Charge: toNumber(cart.pfu2Charge),
-      discount: toNumber(cart.discount),
-      grandTotal,
-      shippingAddress: shipping,
-      billingAddress: body.billing || cart.billingAddress || {},
-      paymentMethod,
-      advancePayment: advanceAmount,
-      remainingAmount: Number((grandTotal - advanceAmount).toFixed(2)),
-      mfsPayment,
-      status: 'PENDING',
-      paymentStatus: advanceAmount > 0 ? 'paid' : 'pending',
-    });
+    // paid when nothing is owed, or when the advance covers the whole payable
+    // amount; partial when money is still outstanding.
+    const paymentStatus = isFreeOrder
+      ? 'paid'
+      : advanceAmount >= payableTotal && payableTotal > 0
+        ? 'paid'
+        : advanceAmount > 0
+          ? 'partial'
+          : 'pending';
 
-    // Also create Payments collection record for admin UI compatibility
-    await this.paymentModel.create({
-      orderId: orderNumber,
-      method: paymentMethod,
-      phoneNumber: shippingPhone || '',
-      transactionStatus: body.advancePaymentData?.trxID ? 'Completed' : 'pending',
-      statusMessage: body.advancePaymentData?.trxID ? 'Paid via online payment' : 'Awaiting payment confirmation',
-      amount: String(grandTotal),
-      paymentStatus: advanceAmount > 0 ? 'paid' : 'pending',
-      paymentSource: 'prestock',
-      cashPayment: 0,
-      mfsPayment: mfsPayment || undefined,
-      bankPayment: null,
-    });
+    // Take the use BEFORE writing the order. The increment and the maxUse guard
+    // happen in one atomic update, so two customers racing for the last use
+    // cannot both win. If anything below then fails the use is handed back and
+    // no orphan order is left behind.
+    if (cart.couponCode) {
+      await this.couponsService.consume(cart.couponCode);
+    }
+
+    let order: any;
+    try {
+      order = await this.orderModel.create({
+        orderNumber,
+        userId: body.userId || undefined,
+        isGuest: body.isGuest === true || !body.userId,
+        guestEmail: shippingEmail,
+        guestContact: body.guestContact || shippingPhone,
+        customerName: shippingName,
+        contactNumber: shippingPhone,
+        emailAddress: shippingEmail,
+        items,
+        itemPrice: toNumber(cart.itemPrice),
+        tax: toNumber(cart.tax),
+        pfu2Charge: toNumber(cart.pfu2Charge),
+        discount,
+        couponCode: cart.couponCode,
+        grandTotal,
+        shippingAddress: shipping,
+        billingAddress: body.billing || cart.billingAddress || {},
+        paymentMethod,
+        advancePayment: advanceAmount,
+        remainingAmount: Number((payableTotal - advanceAmount).toFixed(2)),
+        mfsPayment,
+        status: 'PENDING',
+        paymentStatus,
+      });
+
+      // Also create Payments collection record for admin UI compatibility
+      await this.paymentModel.create({
+        orderId: orderNumber,
+        method: paymentMethod,
+        phoneNumber: shippingPhone || '',
+        transactionStatus: isFreeOrder
+          ? 'Completed'
+          : body.advancePaymentData?.trxID
+            ? 'Completed'
+            : 'pending',
+        statusMessage: isFreeOrder
+          ? 'Paid in full by coupon - no payment required'
+          : body.advancePaymentData?.trxID
+            ? 'Paid via online payment'
+            : 'Awaiting payment confirmation',
+        amount: String(payableTotal),
+        paymentStatus,
+        paymentSource: 'prestock',
+        cashPayment: 0,
+        mfsPayment: mfsPayment || undefined,
+        bankPayment: null,
+      });
+    } catch (err) {
+      // The order never came into existence, so the coupon use is given back.
+      if (cart.couponCode) {
+        await this.couponsService.release(cart.couponCode);
+      }
+      throw err;
+    }
 
     await this.cartService.deleteById(body.cartId);
 

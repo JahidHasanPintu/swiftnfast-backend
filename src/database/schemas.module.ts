@@ -31,6 +31,7 @@ import Pfu2ShippingAddressSchema from 'src/storefront/schemas/pfu2-shipping-addr
 import Pfu2BillingAddressSchema from 'src/storefront/schemas/pfu2-billing-address.schema';
 import Pfu2PaymentSchema from 'src/storefront/schemas/pfu2-payment.schema';
 import { PreStockOrderSchema } from 'src/storefront/schemas/pre-stock-order.schema';
+import { CouponSchema } from 'src/storefront/schemas/coupon.schema';
 import SmsLogSchema from 'src/storefront/sms/schemas/sms-log.schema';
 
 /**
@@ -73,6 +74,7 @@ import SmsLogSchema from 'src/storefront/sms/schemas/sms-log.schema';
       { name: 'Pfu2BillingAddress', schema: Pfu2BillingAddressSchema },
       { name: 'Pfu2Payment', schema: Pfu2PaymentSchema },
       { name: 'PreStockOrder', schema: PreStockOrderSchema },
+      { name: 'Coupon', schema: CouponSchema },
       { name: 'SmsLog', schema: SmsLogSchema },
     ]),
   ],
