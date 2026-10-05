@@ -118,7 +118,10 @@ export class AssistantService implements OnModuleInit {
     }
     const top = fused[0];
     const topFaq = faqs.find((f) => f.id === top.id);
-    const confidence = Math.min(top.score, 1);
+    const bmTop = bm[0]?.score || 0;
+    const bmNorm = bmTop / (bmTop + 4);
+    const fuzzyTop = fuzzyList[0]?.score || 0;
+    const confidence = Math.min(1, Math.max(bmNorm, fuzzyTop));
     if (confidence < 0.6) {
       await this.logUnanswered(raw, norm, top.id, top.score);
       await this.event('chatbot_unanswered');
