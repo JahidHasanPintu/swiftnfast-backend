@@ -1,7 +1,9 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Public } from 'src/common/decorators/public.decorator';
 import { AssistantService } from './assistant.service';
 import { AskDto, WeightChargeDto } from './dto/assistant.dto';
 
+@Public()
 @Controller('api/v1/storefront/assistant')
 export class AssistantController {
   constructor(private readonly service: AssistantService) {}
