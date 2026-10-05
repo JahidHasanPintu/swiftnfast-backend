@@ -3,7 +3,7 @@ import { AssistantService } from './assistant.service';
 import { GlobalJwtAuthGuard } from '../common/guards/global-jwt-auth.guard';
 
 @UseGuards(GlobalJwtAuthGuard)
-@Controller('admin/assistant')
+@Controller('api/v1/admin/assistant')
 export class AdminAssistantController {
   constructor(private readonly service: AssistantService) {}
 
