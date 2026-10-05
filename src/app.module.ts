@@ -23,6 +23,7 @@ import { GlobalJwtAuthGuard } from './common/guards/global-jwt-auth.guard';
 import { StorefrontModule } from './storefront/storefront.module';
 import { NotificationsModule } from './common/notifications.module';
 import { NotificationModule } from './storefront/notifications/notification.module';
+import { AssistantModule } from './assistant/assistant.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { NotificationModule } from './storefront/notifications/notification.modu
     StorefrontModule,
     NotificationsModule,
     NotificationModule,
+    AssistantModule,
   ],
   controllers: [AppController],
   // providers: [AppService],

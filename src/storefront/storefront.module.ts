@@ -18,6 +18,7 @@ import { AdminModule } from './admin/admin.module';
 import { MailModule } from './mail/mail.module';
 import { SmsModule } from './sms/sms.module';
 import { NotificationModule } from './notifications/notification.module';
+import { AssistantModule } from '../assistant/assistant.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { NotificationModule } from './notifications/notification.module';
     MailModule,
     SmsModule,
     NotificationModule,
+    AssistantModule,
   ],
 })
 export class StorefrontModule {}

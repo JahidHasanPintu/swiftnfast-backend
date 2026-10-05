@@ -1,0 +1,17 @@
+export const SYNONYMS: Record<string, string[]> = {
+  delivery: ['deliver', 'shipping', 'shipment', 'dispatch', 'send', 'sent'],
+  time: ['days', 'day', 'duration', 'how long', 'when', 'arrival', 'arrive'],
+  cost: ['price', 'charge', 'fee', 'amount', 'pay', 'payment', 'bdt', 'taka', 'tk'],
+  weight: ['kg', 'gm', 'gram', 'grams', 'gms', 'lbs', 'lb'],
+  advance: ['deposit', 'partial', 'down payment', 'upfront', 'token'],
+  order: ['purchase', 'buy', 'booking', 'request'],
+  customs: ['duty', 'tax', 'vat', 'clearance'],
+  refund: ['return', 'cancel', 'cancellation', 'money back', 'revert'],
+  ready: ['stock', 'instock', 'in stock'],
+  dhaka: ['inside dhaka', 'dacca'],
+  outside: ['outside dhaka', 'other district', 'district', 'upazila'],
+  usa: ['united states', 'us', 'america'],
+  uk: ['united kingdom', 'britain', 'england', 'scotland', 'wales'],
+  phone: ['mobile', 'smartphone', 'cellphone'],
+  laptop: ['notebook', 'pc'],
+};
