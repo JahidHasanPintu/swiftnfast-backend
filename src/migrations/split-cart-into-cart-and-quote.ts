@@ -231,6 +231,13 @@ async function run() {
   await dropIndexIfPresent(collection, 'guestToken_1');
   await dropIndexIfPresent(collection, 'userId_1');
   await dropIndexIfPresent(collection, 'isRequested_1');
+  // The old compound index has to go HERE, not just before the rebuild in
+  // step 4. It is unique, and a sparse compound index still indexes documents
+  // that merely LACK guestToken - so every basket without a token shares the
+  // key { guestToken: null, kind: ... }. Stamping `kind` below re-indexes those
+  // documents and E11000s against each other while the index is still there.
+  // Dropping it first costs nothing: step 4 rebuilds it from scratch.
+  await dropIndexIfPresent(collection, 'guestToken_1_kind_1');
 
   // 1b. Guest baskets folded into an account used to be saved with
   //     `guestToken: undefined`, which the driver stores as null. A stored
@@ -430,8 +437,8 @@ async function run() {
     );
   }
 
-  // 4. New indexes. Dropped first in case a partial run left them behind.
-  await dropIndexIfPresent(collection, 'guestToken_1_kind_1');
+  // 4. New indexes. The other two are dropped first in case a partial run left
+  //    them behind; guestToken_1_kind_1 was already dropped in step 1.
   await dropIndexIfPresent(collection, 'userId_1_kind_1');
   await dropIndexIfPresent(collection, 'kind_1_isRequested_1');
 
