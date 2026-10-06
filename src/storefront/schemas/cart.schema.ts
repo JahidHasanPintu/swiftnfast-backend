@@ -85,11 +85,20 @@ export const CartSchema = new mongoose.Schema(
   { timestamps: true },
 );
 CartSchema.index({ userId: 1, kind: 1 });
-// One basket per kind per guest. `sparse` keeps user carts (no guestToken)
-// out of the index entirely.
+// One basket per kind per guest.
+//
+// `sparse` is NOT enough here: a sparse index only skips documents where the
+// field is ABSENT, and a guest cart folded into a user account used to leave an
+// explicit `guestToken: null` behind. Every one of those then collided on
+// { guestToken: null, kind: 'cart' }. A partial index on the string type
+// excludes both the absent and the null case, so uniqueness is enforced only
+// between real guest tokens.
 CartSchema.index(
   { guestToken: 1, kind: 1 },
-  { unique: true, sparse: true },
+  {
+    unique: true,
+    partialFilterExpression: { guestToken: { $type: 'string' } },
+  },
 );
 CartSchema.index({ kind: 1, isRequested: 1 });
 

@@ -63,7 +63,9 @@ function calculateCartTotals(
   }
 
   const itemPrice = basePriceBdt + taxBdt;
-  const totalPrice = toFixed2(itemPrice + shippingBdt - (Number(discount) || 0));
+  const totalPrice = toFixed2(
+    itemPrice + shippingBdt - (Number(discount) || 0),
+  );
   return {
     itemPrice: toFixed2(itemPrice),
     tax: toFixed2(taxBdt),
@@ -88,10 +90,14 @@ export class CartService {
    * the given items. Call this once per cart mutation, then pass the returned
    * function to `calculateCartTotals` and `stampMoney`.
    */
-  private async buildRateLookup(items: any[]): Promise<(source: string) => number> {
+  private async buildRateLookup(
+    items: any[],
+  ): Promise<(source: string) => number> {
     const sources = new Set<string>();
     for (const it of items || []) {
-      const s = String(it?.productSourcedFrom || '').trim().toUpperCase();
+      const s = String(it?.productSourcedFrom || '')
+        .trim()
+        .toUpperCase();
       if (s) sources.add(s);
     }
     const rates = new Map<string, number>();
@@ -104,7 +110,11 @@ export class CartService {
       }),
     );
     return (source: string) =>
-      rates.get(String(source || '').trim().toUpperCase()) ?? 1;
+      rates.get(
+        String(source || '')
+          .trim()
+          .toUpperCase(),
+      ) ?? 1;
   }
 
   /**
@@ -260,29 +270,49 @@ export class CartService {
       totalPrice: 0,
     };
     if (identity.userId) {
-      let cart = await this.cartModel
-        .findOne({ userId: identity.userId, kind })
-        .exec();
+      const filter = { userId: identity.userId, kind };
+      let cart = await this.cartModel.findOne(filter).exec();
       if (!cart) {
-        cart = new this.cartModel({ ...base, userId: identity.userId });
-        await cart.save();
+        cart = await this.createWithRetry(filter, {
+          ...base,
+          userId: identity.userId,
+        });
       }
       return cart;
     }
     if (identity.guestToken) {
-      let cart = await this.cartModel
-        .findOne({ guestToken: identity.guestToken, kind })
-        .exec();
+      const filter = { guestToken: identity.guestToken, kind };
+      let cart = await this.cartModel.findOne(filter).exec();
       if (!cart) {
-        cart = new this.cartModel({
+        cart = await this.createWithRetry(filter, {
           ...base,
           guestToken: identity.guestToken,
         });
-        await cart.save();
       }
       return cart;
     }
     throw new BadRequestException('Missing user or guest token');
+  }
+
+  /**
+   * Save a brand-new basket, tolerating the findOne/save race: two parallel
+   * requests for the same owner+kind can both miss the findOne, and the unique
+   * index then rejects the loser with E11000. Re-read the winner's document
+   * instead of surfacing the duplicate-key error to the customer.
+   */
+  private async createWithRetry(filter: Record<string, any>, doc: any) {
+    try {
+      return await new this.cartModel(doc).save();
+    } catch (err: any) {
+      const duplicated =
+        err?.code === 11000 ||
+        err?.codeName === 'DuplicateKey' ||
+        /E11000 duplicate key/.test(String(err?.message || ''));
+      if (!duplicated) throw err;
+      const existing = await this.cartModel.findOne(filter).exec();
+      if (!existing) throw err;
+      return existing;
+    }
   }
 
   async getMyCart(
@@ -322,8 +352,8 @@ export class CartService {
    * calculated against.
    */
   private cartSubtotal(cart: any): number {
-    return (
-      toFixed2(Number(cart?.itemPrice || 0) + Number(cart?.shippingBdt || 0))
+    return toFixed2(
+      Number(cart?.itemPrice || 0) + Number(cart?.shippingBdt || 0),
     );
   }
 
@@ -735,13 +765,19 @@ export class CartService {
       if (!guestCart) continue;
       const guestItems = parseItems(guestCart.items);
 
-      const userCart = await this.cartModel
-        .findOne({ userId, kind })
-        .exec();
+      const userCart = await this.cartModel.findOne({ userId, kind }).exec();
       if (!userCart) {
-        guestCart.userId = userId as any;
-        guestCart.guestToken = undefined as any;
-        await guestCart.save();
+        // Take the guest basket over as the user's, dropping the token.
+        // $unset (not `guestToken = undefined` + save): mongoose hands the
+        // driver `undefined`, which the driver serialises as null, and a stored
+        // `guestToken: null` still participates in the unique index - that is
+        // what produced the E11000 "dup key { guestToken: null }" crashes.
+        await this.cartModel
+          .updateOne(
+            { _id: guestCart._id },
+            { $set: { userId }, $unset: { guestToken: 1 } },
+          )
+          .exec();
         continue;
       }
 

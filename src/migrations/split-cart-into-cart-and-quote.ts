@@ -10,10 +10,13 @@ import 'dotenv/config';
  *
  *   1. drops the old single-field unique index on guestToken, which would
  *      otherwise reject a second basket for the same guest,
+ *   1b. removes stored `guestToken: null` / '' leftovers from guest-to-user
+ *      merges, which would otherwise collide with each other,
  *   2. stamps `kind` on every existing basket,
  *   3. splits any legacy MIXED basket into a cart document and a quote
  *      document so no outside_order item is left behind in a cart,
- *   4. creates the new {guestToken, kind} unique index.
+ *   4. creates the new {guestToken, kind} unique index (partial, so only real
+ *      tokens are uniqueness-constrained).
  *
  * Usage:
  *   npm run migrate:split-cart-into-cart-and-quote            # applies
@@ -69,7 +72,10 @@ function isOutside(item: any): boolean {
   return (item?.type || 'product') === 'outside_order';
 }
 
-async function dropIndexIfPresent(collection: mongoose.Collection, name: string) {
+async function dropIndexIfPresent(
+  collection: mongoose.Collection,
+  name: string,
+) {
   const exists = await collection.indexExists(name);
   if (!exists) {
     console.log(`index ${name}: not present, skipping`);
@@ -119,12 +125,18 @@ function lineKey(it: any): string {
  * loses nothing, and any coupon is cleared because it was priced against the
  * smaller item set. The customer simply re-applies it at checkout.
  */
-async function mergeDuplicateBaskets(CartModel: any, collection: mongoose.Collection) {
+async function mergeDuplicateBaskets(
+  CartModel: any,
+  collection: mongoose.Collection,
+) {
   const groups = await collection
     .aggregate([
       {
         $group: {
-          _id: { owner: { $ifNull: ['$userId', '$guestToken'] }, kind: '$kind' },
+          _id: {
+            owner: { $ifNull: ['$userId', '$guestToken'] },
+            kind: '$kind',
+          },
           ids: { $push: '$_id' },
           n: { $sum: 1 },
         },
@@ -181,14 +193,18 @@ async function mergeDuplicateBaskets(CartModel: any, collection: mongoose.Collec
             totalPrice: Number((t.itemPrice + t.shipping).toFixed(2)),
             isRequested: anyRequested,
             isRead: anyUnread ? false : primary.isRead,
-            requestedAt: anyRequested ? requestedAt ?? primary.requestedAt : undefined,
+            requestedAt: anyRequested
+              ? requestedAt ?? primary.requestedAt
+              : undefined,
             // Priced against the old, smaller item set.
             discount: 0,
             couponCode: null,
           },
         },
       );
-      await CartModel.deleteMany({ _id: { $in: redundant.map((d: any) => d._id) } });
+      await CartModel.deleteMany({
+        _id: { $in: redundant.map((d: any) => d._id) },
+      });
     }
 
     mergedGroups++;
@@ -203,7 +219,9 @@ async function mergeDuplicateBaskets(CartModel: any, collection: mongoose.Collec
 
 async function run() {
   await mongoose.connect(uri);
-  console.log(`Connected to MongoDB (${DRY_RUN ? 'DRY RUN, no writes' : 'APPLYING'})`);
+  console.log(
+    `Connected to MongoDB (${DRY_RUN ? 'DRY RUN, no writes' : 'APPLYING'})`,
+  );
 
   const CartModel = mongoose.model('Cart', CartSchema);
   const collection = CartModel.collection;
@@ -213,6 +231,30 @@ async function run() {
   await dropIndexIfPresent(collection, 'guestToken_1');
   await dropIndexIfPresent(collection, 'userId_1');
   await dropIndexIfPresent(collection, 'isRequested_1');
+
+  // 1b. Guest baskets folded into an account used to be saved with
+  //     `guestToken: undefined`, which the driver stores as null. A stored
+  //     null is still an indexed value, so every such basket collided with the
+  //     next one on { guestToken: null, kind }. Remove the field entirely:
+  //     `$ifNull` grouping below then keys these baskets on userId (or on no
+  //     owner at all if userId is missing too). An empty string is treated the
+  //     same way - it is a real (and shared) indexed value otherwise.
+  const noToken = {
+    $or: [{ guestToken: { $type: 'null' } }, { guestToken: '' }],
+  };
+  const nullTokens = await collection.countDocuments(noToken);
+  if (nullTokens > 0) {
+    if (DRY_RUN) {
+      console.log(`empty guestToken: would unset on ${nullTokens} basket(s)`);
+    } else {
+      const res = await collection.updateMany(noToken, {
+        $unset: { guestToken: '' },
+      });
+      console.log(`empty guestToken unset on ${res.modifiedCount} basket(s)`);
+    }
+  } else {
+    console.log('empty guestToken: none found');
+  }
 
   // Read raw documents. `.lean()` is essential: the schema declares
   // `default: 'cart'`, so a hydrated doc would report kind 'cart' even when the
@@ -245,7 +287,10 @@ async function run() {
       // Pure outside-order basket: it is a quote.
       if (c.kind !== 'quote') {
         if (!DRY_RUN) {
-          await CartModel.updateOne({ _id: c._id }, { $set: { kind: 'quote' } });
+          await CartModel.updateOne(
+            { _id: c._id },
+            { $set: { kind: 'quote' } },
+          );
         }
         stamped++;
       }
@@ -321,7 +366,10 @@ async function run() {
     .aggregate([
       {
         $group: {
-          _id: { owner: { $ifNull: ['$userId', '$guestToken'] }, kind: '$kind' },
+          _id: {
+            owner: { $ifNull: ['$userId', '$guestToken'] },
+            kind: '$kind',
+          },
           n: { $sum: 1 },
         },
       },
@@ -348,7 +396,38 @@ async function run() {
     await mongoose.disconnect();
     process.exit(1);
   } else {
-    console.log('Every owner has at most one basket per kind: unique index is safe.');
+    console.log(
+      'Every owner has at most one basket per kind: unique index is safe.',
+    );
+  }
+
+  // 3b. The unique index keys on guestToken specifically, so also check that no
+  //     real token owns two baskets of the same kind - a basket carrying BOTH a
+  //     userId and a guestToken is grouped by userId above and would slip past
+  //     the check in step 3.
+  const tokenDupes = await collection
+    .aggregate([
+      { $match: { guestToken: { $type: 'string' } } },
+      { $group: { _id: { t: '$guestToken', k: '$kind' }, n: { $sum: 1 } } },
+      { $match: { n: { $gt: 1 } } },
+      { $count: 'groups' },
+    ])
+    .toArray();
+  const tokenDupeCount = tokenDupes[0]?.groups || 0;
+  if (tokenDupeCount > 0 && !DRY_RUN) {
+    console.error(
+      `\nABORTED: ${tokenDupeCount} guestToken/kind group(s) hold more than one basket.`,
+    );
+    console.error(
+      'The unique index cannot be created until those are merged by hand.',
+    );
+    await mongoose.disconnect();
+    process.exit(1);
+  }
+  if (tokenDupeCount > 0) {
+    console.log(
+      `${tokenDupeCount} guestToken/kind group(s) still clash because this was a dry run.`,
+    );
   }
 
   // 4. New indexes. Dropped first in case a partial run left them behind.
@@ -357,13 +436,19 @@ async function run() {
   await dropIndexIfPresent(collection, 'kind_1_isRequested_1');
 
   if (DRY_RUN) {
-    console.log('index guestToken_1_kind_1: would create (unique, sparse)');
+    console.log(
+      'index guestToken_1_kind_1: would create (unique, partial on string guestToken)',
+    );
     console.log('index userId_1_kind_1: would create');
     console.log('index kind_1_isRequested_1: would create');
   } else {
     await collection.createIndex(
       { guestToken: 1, kind: 1 },
-      { unique: true, sparse: true, name: 'guestToken_1_kind_1' },
+      {
+        unique: true,
+        partialFilterExpression: { guestToken: { $type: 'string' } },
+        name: 'guestToken_1_kind_1',
+      },
     );
     await collection.createIndex(
       { userId: 1, kind: 1 },
