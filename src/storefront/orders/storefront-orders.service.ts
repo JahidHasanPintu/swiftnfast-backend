@@ -716,7 +716,17 @@ export class StorefrontOrdersService {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 10;
     const skip = (page - 1) * limit;
-    const filter: any = { userId };
+    // Mongoose does NOT cast aggregate() pipeline stages the way it casts
+    // find(). The JWT hands us userId as a string while Orders.userId is an
+    // ObjectId, so `$match: { userId: "<hex>" }` compared a string against an
+    // ObjectId and returned nothing - the account page then listed only the
+    // pre-stock orders (whose query goes through find() and does get cast).
+    // Cast it here, exactly as getMyAccountOrderByNumber() already does.
+    const filter: any = {
+      userId: Types.ObjectId.isValid(String(userId))
+        ? new Types.ObjectId(String(userId))
+        : userId,
+    };
     if (query.status) filter.status = query.status;
 
     const [groups, counted] = await Promise.all([
