@@ -15,6 +15,9 @@ export const PaymentSchema = new mongoose.Schema(
     // back as undefined and orders would look permanently unpaid.
     method: { type: String, default: '' }, // bkash | eps | cash | coupon
     phoneNumber: { type: String, default: '' },
+    // Gateway reference (bKash trxID / eps transaction id). Strict mode drops
+    // it unless it is declared, and the admin payment panel reads it back.
+    transactionId: { type: String, default: '' },
     transactionStatus: { type: String, default: 'pending' },
     statusMessage: { type: String, default: '' },
     amount: { type: String, default: '' }, // kept as string: written as String(total)
@@ -29,6 +32,7 @@ export const PaymentSchema = new mongoose.Schema(
       selectedMFS: { type: String },
       mfsTrxId: { type: String },
       mfsAmount: { type: Number },
+      paymentId: { type: String },
     },
     bankPayment: {
       selectedBank: { type: String },

@@ -9,6 +9,7 @@ import { NotificationService } from 'src/storefront/notifications/notification.s
 export class PathaoService {
   constructor(
     @InjectModel('Purchases') private PurchaseModel: Model<PurchaseDocument>,
+    @InjectModel('PreStockOrder') private preStockOrderModel: Model<any>,
     private readonly notificationService: NotificationService,
   ) {}
 
@@ -303,5 +304,236 @@ export class PathaoService {
       failed: errors,
       summary: `${results.length} succeeded, ${errors.length} failed`,
     };
+  }
+
+  // ── Pre-stock (stock) orders ─────────────────────────────────────────
+  // A ready-stock order carries its own recipient on `shippingAddress`, so it
+  // needs no join against the `customers` collection like a purchase does.
+
+  private validatePreStockOrder(order: any, label: string): string[] {
+    const errors: string[] = [];
+    const shipping = order.shippingAddress || {};
+
+    if (!order.customerName && !shipping.name) {
+      errors.push(`${label}: recipient name is missing`);
+    }
+    if (!order.contactNumber && !shipping.phone) {
+      errors.push(`${label}: recipient phone is missing`);
+    }
+    if (
+      !shipping.address &&
+      !shipping.street &&
+      !shipping.line1 &&
+      !shipping.shippingAddress
+    ) {
+      errors.push(`${label}: recipient address is missing`);
+    }
+
+    return errors;
+  }
+
+  private buildPreStockPayload(
+    order: any,
+    item: any,
+    orderItemIndex: number,
+    specialInstruction?: string,
+  ) {
+    const shipping = order.shippingAddress || {};
+    const asInt = (v: any) => {
+      const n = parseInt(String(v ?? '').replace(/\D/g, ''), 10);
+      return Number.isFinite(n) && n > 0 ? n : undefined;
+    };
+
+    const city = asInt(shipping.city) ?? asInt(shipping.cityId) ?? 1;
+    const zone = asInt(shipping.zone) ?? asInt(shipping.zoneId) ?? 1;
+
+    return {
+      store_id: process.env.PATHAO_STORE_ID,
+
+      merchant_order_id: `${order.orderNumber}-${orderItemIndex}`,
+
+      recipient_name: shipping.name || order.customerName,
+
+      recipient_phone: shipping.phone || order.contactNumber,
+
+      recipient_address:
+        shipping.address || shipping.street || shipping.line1 || '',
+
+      recipient_city: city,
+      recipient_zone: zone,
+
+      delivery_type: 48,
+      item_type: 2,
+
+      special_instruction:
+        specialInstruction ||
+        shipping.notes ||
+        shipping.deliveryNote ||
+        item.orderNotes ||
+        '',
+
+      item_quantity: Number(item.quantity || 1),
+
+      item_weight: Number(item.weight || 0.5),
+
+      amount_to_collect: Number(item.remainingAmount || 0),
+
+      item_description: item.prodDesc || 'Product',
+    };
+  }
+
+  /** Hand a single ready-stock line to Pathao. */
+  async createPreStockDelivery(
+    orderNumber: string,
+    orderItemIndex: number,
+    specialInstruction?: string,
+  ) {
+    const order: any = await this.preStockOrderModel
+      .findOne({ orderNumber })
+      .lean()
+      .exec();
+
+    if (!order) {
+      throw new BadRequestException(`Order ${orderNumber} not found`);
+    }
+
+    const item = (order.items || [])[Number(orderItemIndex)];
+    if (!item) {
+      throw new BadRequestException(
+        `Order ${orderNumber} item ${orderItemIndex} not found`,
+      );
+    }
+
+    const label = `${orderNumber}-${orderItemIndex}`;
+
+    if (item.delivery?.pathaoConsignmentId) {
+      throw new BadRequestException({
+        errors: [
+          `${label}: already dispatched (consignment ${item.delivery.pathaoConsignmentId})`,
+        ],
+      });
+    }
+
+    const errors = this.validatePreStockOrder(order, label);
+    if (item.remainingAmount === undefined || item.remainingAmount === null) {
+      errors.push(`${label}: remaining amount is missing`);
+    }
+    if (errors.length) {
+      throw new BadRequestException({ errors });
+    }
+
+    const payload = this.buildPreStockPayload(
+      order,
+      item,
+      orderItemIndex,
+      specialInstruction,
+    );
+
+    try {
+      const res = await this.pathaoPost('/aladdin/api/v1/orders', payload);
+      const { consignment_id, order_id, order_status } = res.data.data;
+
+      const idx = Number(orderItemIndex);
+      const isSettled = (s: string) =>
+        ['SHIPPED', 'PARTIAL_DELIVERED', 'FULL_DELIVERED', 'CANCELLED'].includes(
+          s,
+        );
+      const preShipment = new Set([
+        'PENDING',
+        'CONFIRMED',
+        'PROCESSING',
+        'USWAREHOUSE',
+        'BDOFFICE',
+      ]);
+      // The order only flips to SHIPPED once every line has left the building;
+      // a half-shipped order keeps the status the admin gave it.
+      const allSettled = (order.items || []).every(
+        (it: any, i: number) => i === idx || isSettled(it?.status),
+      );
+      const nextOrderStatus =
+        preShipment.has(order.status) && allSettled ? 'SHIPPED' : order.status;
+
+      await this.preStockOrderModel.updateOne(
+        { orderNumber },
+        {
+          $set: {
+            [`items.${idx}.status`]: 'SHIPPED',
+            [`items.${idx}.delivery`]: {
+              method: 'Pathao',
+              pathaoConsignmentId: consignment_id,
+              pathaoOrderId: order_id,
+              pathaoStatus: order_status,
+              pathaoCreatedAt: new Date(),
+            },
+            status: nextOrderStatus,
+          },
+        },
+      );
+
+      this.notificationService
+        .notifyStatusChange('STATUS_FULL_SHIPPED', {
+          customerName: order.customerName,
+          customerPhone: order.contactNumber,
+          orderNumber,
+          status: 'Shipped',
+          trackingCode: String(consignment_id),
+        })
+        .catch(() => {});
+
+      return {
+        success: true,
+        consignment_id,
+        order_id,
+        order_status,
+        payloadSent: payload,
+      };
+    } catch (err: any) {
+      this.logger.error(
+        `Pathao pre-stock error: ${err?.response?.data?.message || err?.message || err}`,
+      );
+      const msg = err?.response?.data?.message || 'Pathao API error';
+      throw new BadRequestException({ errors: [`${label}: ${msg}`] });
+    }
+  }
+
+  /** Hand a batch of ready-stock lines to Pathao, one failure does not stop the rest. */
+  async createPreStockBulkDelivery(
+    orders: { orderId: string; orderItemIndex: number }[],
+  ) {
+    const results: any[] = [];
+    const errors: string[] = [];
+
+    for (const { orderId, orderItemIndex } of orders) {
+      try {
+        const res = await this.createPreStockDelivery(
+          orderId,
+          Number(orderItemIndex),
+        );
+        results.push({
+          label: `${orderId}-${orderItemIndex}`,
+          success: true,
+          consignment_id: res.consignment_id,
+          order_id: res.order_id,
+        });
+      } catch (err: any) {
+        errors.push(...this.errorsFrom(err, `${orderId}-${orderItemIndex}`));
+      }
+    }
+
+    return {
+      succeeded: results,
+      failed: errors,
+      summary: `${results.length} succeeded, ${errors.length} failed`,
+    };
+  }
+
+  /** Turn whatever a failed call threw into the label list the UI renders. */
+  private errorsFrom(err: any, label: string): string[] {
+    const resp =
+      typeof err?.getResponse === 'function' ? err.getResponse() : err?.response;
+    if (Array.isArray(resp?.errors)) return resp.errors;
+    const msg =
+      resp?.errors || resp?.message || err?.response?.data?.message || err?.message;
+    return [`${label}: ${msg || 'Pathao API error'}`];
   }
 }

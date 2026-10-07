@@ -211,4 +211,25 @@ export class PurchaseController {
   async createPathaoBulkDelivery(@Body() body: PathaoBulkDeliveryDto) {
     return this.pathaoService.createBulkDelivery(body.orders);
   }
+
+  // Ready-stock orders keep the same courier but live in their own
+  // collection, so they get their own pair of endpoints.
+
+  @Post('pathao/prestock/single/:orderId/:orderItemIndex')
+  async createPathaoPreStockSingleDelivery(
+    @Param('orderId') orderId: string,
+    @Param('orderItemIndex') orderItemIndex: number,
+    @Body() body: { specialInstruction?: string } = {},
+  ) {
+    return this.pathaoService.createPreStockDelivery(
+      orderId,
+      Number(orderItemIndex),
+      body?.specialInstruction,
+    );
+  }
+
+  @Post('pathao/prestock/bulk')
+  async createPathaoPreStockBulkDelivery(@Body() body: PathaoBulkDeliveryDto) {
+    return this.pathaoService.createPreStockBulkDelivery(body.orders);
+  }
 }
