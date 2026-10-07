@@ -9,6 +9,9 @@
 export type NotificationScenario =
   | 'PRICE_UPDATED'
   | 'ORDER_CREATED'
+  | 'CART_ITEM_HOLD'
+  | 'CART_ITEM_CANCELLED'
+  | 'CART_ITEM_REOPENED'
   | 'STATUS_PENDING'
   | 'STATUS_CONFIRMED'
   | 'STATUS_PROCESSING'
@@ -78,6 +81,31 @@ export const NOTIFICATION_CONFIG: Record<
     smsTemplate:
       'Your price request has been updated. Check your cart & email for details. - PFU2',
     smsPurpose: 'PRICE',
+  },
+
+  // ─── Cart item status (admin Hold / Cancel / Reopen from the price queue) ──
+  CART_ITEM_HOLD: {
+    email: { enabled: true },
+    sms: { enabled: true },
+    smsTemplate:
+      'Hi {{customerName}}, "{{productName}}" in your request is temporarily on hold while we sort it out. We will update you shortly. - PFU2',
+    smsPurpose: 'CART_STATUS',
+  },
+
+  CART_ITEM_CANCELLED: {
+    email: { enabled: true },
+    sms: { enabled: true },
+    smsTemplate:
+      'Hi {{customerName}}, "{{productName}}" in your request has been cancelled.{{reasonText}} Please contact support if you have questions. - PFU2',
+    smsPurpose: 'CART_STATUS',
+  },
+
+  CART_ITEM_REOPENED: {
+    email: { enabled: true },
+    sms: { enabled: true },
+    smsTemplate:
+      'Hi {{customerName}}, good news - "{{productName}}" in your request is available again. You can continue from your cart. - PFU2',
+    smsPurpose: 'CART_STATUS',
   },
 
   // ─── Order Lifecycle ───────────────────────────────────────────────────
@@ -228,4 +256,23 @@ export function resolveScenario(status: string): NotificationScenario | null {
     BDOFFICE: 'BDOFFICE',
   };
   return map[status] || null;
+}
+
+/**
+ * Resolve a cart-item admin status (PENDING / HOLD / CANCELLED as set by the
+ * admin price queue) to its notification scenario.
+ * PENDING here means the item was reopened, so it maps to REOPENED.
+ */
+export function resolveCartItemScenario(
+  status: string,
+): NotificationScenario | null {
+  const map: Record<string, NotificationScenario> = {
+    HOLD: 'CART_ITEM_HOLD',
+    CANCELLED: 'CART_ITEM_CANCELLED',
+    PENDING: 'CART_ITEM_REOPENED',
+  };
+  const key = String(status || '')
+    .trim()
+    .toUpperCase();
+  return map[key] || null;
 }

@@ -25,6 +25,7 @@ import { CartService } from './cart.service';
 import { MailService } from '../mail/mail.service';
 import { EventsGateway } from '../../common/gateways/events.gateway';
 import { NotificationService } from '../notifications/notification.service';
+import { resolveCartItemScenario } from '../notifications/notification.config';
 
 @Public()
 @Controller('api/v1')
@@ -143,6 +144,51 @@ export class CartController {
   @UseGuards(JwtAuthGuard)
   async updateItemStatus(@Param('id') id: string, @Body() body: any) {
     const data = await this.cartService.setItemStatus(id, body);
+
+    // Customer-facing alert when an admin holds / cancels / reopens a line of
+    // a requested cart. Email + SMS are both toggled in NOTIFICATION_CONFIG.
+    const status = String(body.status || 'PENDING')
+      .trim()
+      .toUpperCase();
+    const previous = String(data.previousAdminStatus ?? '')
+      .trim()
+      .toUpperCase();
+    // A reopen only counts as news if the item was actually held/cancelled,
+    // so setting PENDING on a fresh item does not spam the customer.
+    const statusChanged =
+      status === 'PENDING'
+        ? previous === 'HOLD' || previous === 'CANCELLED'
+        : previous !== status;
+    const scenario = resolveCartItemScenario(status);
+
+    if (scenario && statusChanged) {
+      const item = (data.items || []).find(
+        (i: any) =>
+          String(i.productId) === String(body.productId) &&
+          (i.type || 'product') === (body.type || 'product'),
+      );
+      const reason = String(body.reason || item?.adminReason || '').trim();
+      const customerEmail = data.user?.email;
+      const customerPhone = data.user?.phone || data.guestContact;
+      const productName =
+        item?.product?.name || item?.name || 'An item in your request';
+
+      if (customerEmail || customerPhone) {
+        // Fire-and-forget: notify() never throws and already logs failures.
+        this.notificationService.notify(scenario, {
+          customerName: data.user?.name || data.guestContact || 'Customer',
+          customerEmail,
+          customerPhone,
+          cartId: id,
+          productName,
+          itemStatus: status,
+          reason,
+          reasonText: reason ? ` Reason: ${reason}` : '',
+          kind: data.kind,
+        });
+      }
+    }
+
     return {
       success: true,
       message: 'Cart item status updated successfully',

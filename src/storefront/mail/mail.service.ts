@@ -494,4 +494,167 @@ export class MailService {
       this.logger.error(`Failed to send order status update email to ${email}`, err.stack);
     }
   }
+
+  /**
+   * Customer alert for an admin Hold / Cancel / Reopen action on a single
+   * line of a requested cart or quote (the admin price queue).
+   */
+  async sendCartItemStatusEmail(
+    email: string,
+    customerName: string,
+    productName: string,
+    status: string,
+    opts: { reason?: string; kind?: string } = {},
+  ): Promise<void> {
+    const key = String(status || '')
+      .trim()
+      .toUpperCase();
+    const config: Record<
+      string,
+      {
+        color: string;
+        icon: string;
+        title: string;
+        message: string;
+        cta: string;
+      }
+    > = {
+      CANCELLED: {
+        color: '#ef4444',
+        icon: '✕',
+        title: 'Item Cancelled',
+        message:
+          'One of the items in your request cannot be fulfilled and has been cancelled. The rest of your request is unaffected.',
+        cta: 'View My Cart',
+      },
+      HOLD: {
+        color: '#f59e0b',
+        icon: '⏳',
+        title: 'Item On Hold',
+        message:
+          'One of the items in your request is temporarily unavailable. We will update you as soon as it is back.',
+        cta: 'View My Cart',
+      },
+      PENDING: {
+        color: '#22c55e',
+        icon: '✓',
+        title: 'Item Available Again',
+        message:
+          'Good news - one of the items in your request is available again. You can continue from your cart.',
+        cta: 'Continue My Request',
+      },
+    };
+    const conf = config[key] || {
+      color: '#6b7280',
+      icon: '📋',
+      title: 'Item Updated',
+      message: 'The status of an item in your request has been updated.',
+      cta: 'View My Cart',
+    };
+
+    const reason = (opts.reason || '').trim();
+    const reasonSection = reason
+      ? `<div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 15px; margin: 20px 0;">
+           <p style="margin: 0; color: #991b1b; font-size: 14px;"><strong>Reason:</strong> ${reason}</p>
+         </div>`
+      : '';
+    const targetUrl = `${this.clientUrl}/${
+      opts.kind === 'quote' ? 'quote' : 'cart'
+    }`;
+    const subjectName = productName
+      ? productName.length > 60
+        ? `${productName.slice(0, 57)}...`
+        : productName
+      : 'Your item';
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="margin: 0; padding: 0; background-color: #f3f4f6; font-family: Arial, sans-serif;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f3f4f6; padding: 40px 20px;">
+          <tr>
+            <td align="center">
+              <table width="480" cellpadding="0" cellspacing="0" style="background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                <!-- Header -->
+                <tr>
+                  <td style="background: linear-gradient(135deg, #1f2937, #374151); padding: 30px; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 700;">PFU2</h1>
+                    <p style="color: #9ca3af; margin: 5px 0 0 0; font-size: 13px;">Request Item Update</p>
+                  </td>
+                </tr>
+                <!-- Status Badge -->
+                <tr>
+                  <td style="padding: 30px 30px 0 30px; text-align: center;">
+                    <div style="display: inline-block; background: ${conf.color}15; border: 2px solid ${conf.color}; border-radius: 50px; padding: 12px 30px;">
+                      <span style="font-size: 20px; margin-right: 8px;">${conf.icon}</span>
+                      <span style="color: ${conf.color}; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">${conf.title}</span>
+                    </div>
+                  </td>
+                </tr>
+                <!-- Content -->
+                <tr>
+                  <td style="padding: 25px 30px;">
+                    <p style="color: #374151; font-size: 16px; margin: 0 0 10px 0;">Dear <strong>${customerName}</strong>,</p>
+                    <p style="color: #6b7280; font-size: 15px; line-height: 1.6; margin: 0 0 20px 0;">${conf.message}</p>
+                    <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; margin: 20px 0;">
+                      <p style="margin: 0 0 5px 0; font-size: 14px; color: #555;"><strong>Item:</strong> ${subjectName}</p>
+                    </div>
+                    ${reasonSection}
+                  </td>
+                </tr>
+                <!-- CTA Button -->
+                <tr>
+                  <td style="padding: 0 30px 30px 30px; text-align: center;">
+                    <a href="${targetUrl}" style="display: inline-block; background: ${conf.color}; color: #ffffff; padding: 14px 40px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px;">${conf.cta}</a>
+                  </td>
+                </tr>
+                <!-- Divider -->
+                <tr>
+                  <td style="padding: 0 30px;">
+                    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 0;">
+                  </td>
+                </tr>
+                <!-- Footer -->
+                <tr>
+                  <td style="padding: 20px 30px; text-align: center;">
+                    <p style="color: #9ca3af; font-size: 12px; margin: 0 0 5px 0;">If you have any questions, please contact our support team.</p>
+                    <p style="color: #9ca3af; font-size: 12px; margin: 0;">This is an automated email. Please do not reply.</p>
+                  </td>
+                </tr>
+                <!-- Contact Footer -->
+                <tr>
+                  <td style="padding: 0 30px 20px 30px; text-align: center; border-top: 1px solid #e5e7eb;">
+                    <p style="color: #9ca3af; font-size: 11px; margin: 15px 0 3px 0;">PFU2</p>
+                    <p style="color: #9ca3af; font-size: 11px; margin: 3px 0;">Contact: 09678882888, 01613-333011 | Email: shop.pfu2@gmail.com</p>
+                    <p style="color: #9ca3af; font-size: 11px; margin: 3px 0;">Gulshan - 01, Dhaka - 1212</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>`;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.from,
+        to: email,
+        subject: `${conf.title} - ${subjectName} - PFU2`,
+        html,
+      });
+      this.logger.log(
+        `Cart item status email (${key}) sent to ${email} for "${subjectName}"`,
+      );
+    } catch (err) {
+      this.logger.error(
+        `Failed to send cart item status email to ${email}`,
+        err.stack,
+      );
+    }
+  }
 }

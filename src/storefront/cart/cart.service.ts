@@ -36,7 +36,7 @@ function toFixed2(n: number): number {
 
 /**
  * Cart totals in BDT, derived from the canonical per-item breakdown in
- * pricing.util.ts (ceil entered price -> tax -> FX -> ceil BDT).
+ * pricing.util.ts (price + USA tax -> FX -> ceil BDT).
  *
  * `itemPrice` is the tax-INCLUSIVE product price, `tax` is the tax portion of
  * it, and `shippingBdt` is converted-but-untaxed shipping, so the customer
@@ -663,12 +663,15 @@ export class CartService {
       throw new BadRequestException(
         `Invalid status. Allowed: ${allowed.join(', ')}`,
       );
+    // Surfaced so the controller can skip the customer notification when an
+    // admin re-saves a status the item is already in.
+    const previousAdminStatus = items[idx].adminStatus;
     items[idx].adminStatus = status as any;
     if (body.reason !== undefined) items[idx].adminReason = body.reason;
     if (status === 'PENDING') items[idx].adminReason = undefined;
     cart.items = items;
     await cart.save();
-    return this.enrich(cart);
+    return { ...(await this.enrich(cart)), previousAdminStatus };
   }
 
   async removeItem(id: string, productType: string, productId: string) {

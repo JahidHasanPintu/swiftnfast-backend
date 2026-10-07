@@ -53,7 +53,8 @@ export class StorefrontOrdersService {
     @InjectModel('Login') private readonly usersModel: Model<any>,
     @InjectModel('Product') private readonly productModel: Model<any>,
     @InjectModel('Payments') private readonly paymentModel: Model<any>,
-    @InjectModel('PreStockOrder') private readonly preStockOrderModel: Model<any>,
+    @InjectModel('PreStockOrder')
+    private readonly preStockOrderModel: Model<any>,
     private readonly ordersService: OrderService,
     private readonly cartService: CartService,
     private readonly mailService: MailService,
@@ -146,8 +147,9 @@ export class StorefrontOrdersService {
 
       // Per-line BDT math mirroring the checkout page:
       //   per-unit = finalPrice (manual override, tax already baked in)
-      //              or price * (1 + taxRate/100) * rate   [USA only]
-      //   shipping = shippingCost * rate                     [never taxed]
+      //              or ceil((price + USA tax) * rate)  [USA only]
+      //              or ceil(price * rate)              [UK / other]
+      //   shipping = ceil(shippingCost * rate)          [never taxed]
       // Pre-stock items are already BDT and are passed through untouched.
       const unitBdt = computeUnitBdt(item, rate);
       const shippingBdtValue = computeShippingBdt(item, rate);
@@ -236,7 +238,9 @@ export class StorefrontOrdersService {
 
     // The coupon was validated and stored on the basket when it was applied.
     // Deduct it from the order total and work out what is actually collectable.
-    const discount = toFixed2(Math.min(toNumber(cart.discount), orderGrandTotal));
+    const discount = toFixed2(
+      Math.min(toNumber(cart.discount), orderGrandTotal),
+    );
     const payableTotal = toFixed2(Math.max(0, orderGrandTotal - discount));
     // A coupon that covers the whole amount means there is nothing to charge,
     // so the order is recorded as paid without ever touching the gateway.
@@ -267,93 +271,92 @@ export class StorefrontOrdersService {
     try {
       await this.orderModel.insertMany(lineItems);
 
-    const paymentMethod = isFreeOrder
-      ? 'COUPON'
-      : (body.paymentMethod || 'BKASH').toUpperCase();
-    const advanceAmount = isFreeOrder
-      ? 0
-      : toFixed2(
-          Math.min(
-            toNumber(body.advancePaymentData?.amount) || 0,
-            payableTotal,
-          ),
-        );
+      const paymentMethod = isFreeOrder
+        ? 'COUPON'
+        : (body.paymentMethod || 'BKASH').toUpperCase();
+      const advanceAmount = isFreeOrder
+        ? 0
+        : toFixed2(
+            Math.min(
+              toNumber(body.advancePaymentData?.amount) || 0,
+              payableTotal,
+            ),
+          );
 
-    // paid when nothing is owed or the advance covers the whole payable amount;
-    // partial when money is still outstanding.
-    const paymentStatus = isFreeOrder
-      ? 'paid'
-      : advanceAmount >= payableTotal && payableTotal > 0
+      // paid when nothing is owed or the advance covers the whole payable amount;
+      // partial when money is still outstanding.
+      const paymentStatus = isFreeOrder
+        ? 'paid'
+        : advanceAmount >= payableTotal && payableTotal > 0
         ? 'paid'
         : advanceAmount > 0
-          ? 'partial'
-          : 'pending';
+        ? 'partial'
+        : 'pending';
 
-    // Split the advance payment across line items in proportion to their share
-    // of the amount actually payable.
-    const paymentBulk = lineItems.map((item, idx) => {
-      const paid =
-        isFreeOrder
+      // Split the advance payment across line items in proportion to their share
+      // of the amount actually payable.
+      const paymentBulk = lineItems.map((item, idx) => {
+        const paid = isFreeOrder
           ? 0
           : idx === lineItems.length - 1
-            ? toFixed2(advanceAmount - item.advancePayment)
-            : toFixed2(advanceAmount * (item.payableTotal / payableTotal));
-      const remaining = toFixed2(item.payableTotal - paid);
-      item.advancePayment = paid;
-      item.remainingAmount = remaining;
-      return {
-        updateOne: {
-          filter: {
-            orderId: item.orderId,
-            orderItemIndex: item.orderItemIndex,
-          },
-          update: {
-            $set: {
-              advancePayment: paid,
-              remainingAmount: remaining,
+          ? toFixed2(advanceAmount - item.advancePayment)
+          : toFixed2(advanceAmount * (item.payableTotal / payableTotal));
+        const remaining = toFixed2(item.payableTotal - paid);
+        item.advancePayment = paid;
+        item.remainingAmount = remaining;
+        return {
+          updateOne: {
+            filter: {
+              orderId: item.orderId,
+              orderItemIndex: item.orderItemIndex,
+            },
+            update: {
+              $set: {
+                advancePayment: paid,
+                remainingAmount: remaining,
+              },
             },
           },
-        },
-      };
-    });
-    await this.orderModel.bulkWrite(paymentBulk);
+        };
+      });
+      await this.orderModel.bulkWrite(paymentBulk);
 
-    // Persist customer-level totals matching the admin created-order structure
-    // so admin order/lookup views can fall back to order.customer.grandTotal.
-    customer.grandTotal = orderGrandTotal;
-    customer.totalAdvance = advanceAmount;
-    await customer.save();
+      // Persist customer-level totals matching the admin created-order structure
+      // so admin order/lookup views can fall back to order.customer.grandTotal.
+      customer.grandTotal = orderGrandTotal;
+      customer.totalAdvance = advanceAmount;
+      await customer.save();
 
-    // Build MFS payment data if advance payment was made via bKash
-    const mfsPayment = body.advancePaymentData?.trxID
-      ? {
-          selectedMFS: paymentMethod.toLowerCase(),
-          mfsTrxId: body.advancePaymentData.trxID,
-          mfsAmount: advanceAmount,
-        }
-      : undefined;
+      // Build MFS payment data if advance payment was made via bKash
+      const mfsPayment = body.advancePaymentData?.trxID
+        ? {
+            selectedMFS: paymentMethod.toLowerCase(),
+            mfsTrxId: body.advancePaymentData.trxID,
+            mfsAmount: advanceAmount,
+          }
+        : undefined;
 
-    await this.paymentModel.create({
-      orderId: orderNumber,
-      method: paymentMethod.toLowerCase(),
-      phoneNumber: shippingPhone || '',
-      transactionStatus: isFreeOrder
-        ? 'Completed'
-        : body.advancePaymentData?.trxID
+      await this.paymentModel.create({
+        orderId: orderNumber,
+        method: paymentMethod.toLowerCase(),
+        phoneNumber: shippingPhone || '',
+        transactionStatus: isFreeOrder
+          ? 'Completed'
+          : body.advancePaymentData?.trxID
           ? 'Completed'
           : 'pending',
-      statusMessage: isFreeOrder
-        ? 'Paid in full by coupon - no payment required'
-        : body.advancePaymentData?.trxID
+        statusMessage: isFreeOrder
+          ? 'Paid in full by coupon - no payment required'
+          : body.advancePaymentData?.trxID
           ? 'Paid via online payment'
           : 'Awaiting payment confirmation',
-      amount: String(payableTotal),
-      paymentStatus,
-      paymentSource: 'import',
-      customerId: customer._id,
-      cashPayment: 0,
-      mfsPayment,
-      bankPayment: null,
+        amount: String(payableTotal),
+        paymentStatus,
+        paymentSource: 'import',
+        customerId: customer._id,
+        cashPayment: 0,
+        mfsPayment,
+        bankPayment: null,
       });
     } catch (err) {
       // Nothing was completed, so give the coupon use back and drop the
@@ -361,9 +364,7 @@ export class StorefrontOrdersService {
       if (cart.couponCode) {
         await this.couponsService.release(cart.couponCode);
       }
-      await this.orderModel
-        .deleteMany({ orderNumber })
-        .catch(() => undefined);
+      await this.orderModel.deleteMany({ orderNumber }).catch(() => undefined);
       throw err;
     }
 
@@ -471,7 +472,6 @@ export class StorefrontOrdersService {
       couponCode: body.promoCode,
       userId,
       approximatePrice: estimation.approximatePrice,
-      weightCharge: estimation.weightCharge,
       totalEstimatedPrice: estimation.totalEstimatedPrice,
       isPurchased: false,
     };
@@ -496,12 +496,16 @@ export class StorefrontOrdersService {
    * Preliminary estimate for an outside order, using the same canonical
    * pipeline as the cart so the number the customer sees before saving is the
    * number they are actually charged:
-   *   ceil the entered price, apply USA tax, convert, then ceil the BDT result
-   *   USA -> ceil(ceil(price) * (1 + taxRate/100) * usd_rate)
-   *   UK  -> ceil(ceil(price) * gbp_rate)
+   *   apply USA tax to the entered price, convert, then ceil the BDT result
+   *   USA    -> ceil((price + price * taxRate/100) * usd_rate)
+   *   UK/oth -> ceil(price * rate)
    * Ceiling is per-unit; quantity then multiplies the finished unit price.
    * The rate comes from the admin-managed Settings collection, not a hardcoded
    * table, so admin rate changes are reflected immediately.
+   *
+   * MUST stay identical to itemUnitBdt()/calculateItemBdt() in
+   * pfu2-admin-ui/src/components/Pages/Pfu2Admin/RequestedCarts.tsx and to
+   * unitBdt()/baseUnitBdt() in src/storefront/utils/pricing.util.ts.
    */
   async calculatePrice(body: {
     price: number;
@@ -516,21 +520,15 @@ export class StorefrontOrdersService {
       );
     }
     const quantity = toNumber(body.quantity) || 1;
-    const weightCharge = WEIGHT_CHARGES[productSourcedFrom] || 0;
     const exchangeRate = await this.getExchangeRate(productSourcedFrom);
     const pct = taxRatePct(productSourcedFrom, undefined);
 
     // Per-unit, then x quantity - never a re-rounded line total.
     const unitBdt = ceilToWhole(
-      ceilToWhole(toNumber(price)) * (1 + pct / 100) * exchangeRate,
+      toNumber(price) * (1 + pct / 100) * exchangeRate,
     );
-    const baseUnitBdt = ceilToWhole(ceilToWhole(toNumber(price)) * exchangeRate);
+    const baseUnitBdt = ceilToWhole(toNumber(price) * exchangeRate);
     const approximatePrice = unitBdt * quantity;
-
-    let discount = 0;
-    if (body.promoCode && body.promoCode.toUpperCase() === 'SAVE5') {
-      discount = approximatePrice * 0.05;
-    }
 
     const totalEstimatedPrice = approximatePrice;
     return {
@@ -538,8 +536,7 @@ export class StorefrontOrdersService {
       unitPriceBdtExTax: baseUnitBdt,
       taxBdt: unitBdt - baseUnitBdt,
       approximatePrice: Number(approximatePrice.toFixed(2)),
-      weightCharge: Number(weightCharge.toFixed(2)),
-      discount: Number(discount.toFixed(2)),
+
       totalEstimatedPrice: Number(totalEstimatedPrice.toFixed(2)),
     };
   }
@@ -726,7 +723,9 @@ export class StorefrontOrdersService {
       this.orderModel
         .aggregate([
           { $match: filter },
-          { $group: { _id: '$orderNumber', createdAt: { $max: '$createdAt' } } },
+          {
+            $group: { _id: '$orderNumber', createdAt: { $max: '$createdAt' } },
+          },
           { $sort: { createdAt: -1 } },
           { $skip: skip },
           { $limit: limit },
@@ -1074,9 +1073,7 @@ export class StorefrontOrdersService {
       }
 
       // Do not confirm the order exists for somebody else.
-      throw new NotFoundException(
-        `Order with number ${orderNumber} not found`,
-      );
+      throw new NotFoundException(`Order with number ${orderNumber} not found`);
     }
 
     const preStock = await this.preStockOrderModel
@@ -1123,14 +1120,20 @@ export class StorefrontOrdersService {
     // Send status update email + SMS to customer
     if (doc.guestEmail || doc.contactNo) {
       const orderNumber = doc.orderNumber || doc.orderId;
-      this.notificationService.notifyStatusChange(status, {
-        customerName: doc.customerName,
-        customerEmail: doc.guestEmail,
-        customerPhone: doc.contactNo,
-        orderNumber,
-        status,
-        totalPrice: doc.totalPrice,
-      }).catch((err: any) => this.logger.error(`Failed to send status notification: ${err.message}`));
+      this.notificationService
+        .notifyStatusChange(status, {
+          customerName: doc.customerName,
+          customerEmail: doc.guestEmail,
+          customerPhone: doc.contactNo,
+          orderNumber,
+          status,
+          totalPrice: doc.totalPrice,
+        })
+        .catch((err: any) =>
+          this.logger.error(
+            `Failed to send status notification: ${err.message}`,
+          ),
+        );
     }
 
     const docs = await this.orderModel
@@ -1200,14 +1203,20 @@ export class StorefrontOrdersService {
     // Send status update email + SMS to customer
     if (candidates[0].guestEmail || candidates[0].contactNo) {
       const orderNumber = candidates[0].orderNumber || candidates[0].orderId;
-      this.notificationService.notifyStatusChange(body.status, {
-        customerName: candidates[0].customerName,
-        customerEmail: candidates[0].guestEmail,
-        customerPhone: candidates[0].contactNo,
-        orderNumber,
-        status: body.status,
-        totalPrice: candidates[0].totalPrice,
-      }).catch((err: any) => this.logger.error(`Failed to send line item status notification: ${err.message}`));
+      this.notificationService
+        .notifyStatusChange(body.status, {
+          customerName: candidates[0].customerName,
+          customerEmail: candidates[0].guestEmail,
+          customerPhone: candidates[0].contactNo,
+          orderNumber,
+          status: body.status,
+          totalPrice: candidates[0].totalPrice,
+        })
+        .catch((err: any) =>
+          this.logger.error(
+            `Failed to send line item status notification: ${err.message}`,
+          ),
+        );
     }
 
     const docs = await this.orderModel
@@ -1249,14 +1258,16 @@ export class StorefrontOrdersService {
       .exec();
 
     // Send cancellation notification
-    this.notificationService.notifyStatusChange('Cancelled', {
-      customerName: doc.customerName,
-      customerEmail: doc.guestEmail,
-      customerPhone: doc.contactNo,
-      orderNumber,
-      status: 'Cancelled',
-      totalPrice: doc.totalPrice,
-    }).catch(() => {});
+    this.notificationService
+      .notifyStatusChange('Cancelled', {
+        customerName: doc.customerName,
+        customerEmail: doc.guestEmail,
+        customerPhone: doc.contactNo,
+        orderNumber,
+        status: 'Cancelled',
+        totalPrice: doc.totalPrice,
+      })
+      .catch(() => {});
 
     const docs = await this.orderModel.find({ orderNumber }).exec();
     const grouped = await this.groupDocs(docs);

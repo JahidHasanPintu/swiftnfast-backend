@@ -1,13 +1,14 @@
 /**
  * Canonical outside-order pricing (mirrors pfu2-frontend/src/utils/pricing.ts).
  *
- *   USA item : ceil(price) * (1 + taxPct/100) * usd_rate,  then ceil -> BDT
- *   UK item  : ceil(price) * gbp_rate,                     then ceil -> BDT
+ *   USA item : ceil((price + price * taxPct/100) * usd_rate)  -> BDT
+ *   UK item  : ceil(price * gbp_rate)                         -> BDT
+ *   others   : ceil(price * rate)                             -> BDT
  *
- * The entered price may be fractional (39.5, 1.2, ...). It is rounded UP to the
- * next whole unit first, then taxed and converted, and the BDT result is
- * rounded UP again, so every per-unit figure is whole BDT and the customer,
- * admin and backend never disagree.
+ * The entered price may be fractional (39.5, 1.2, ...) and is taxed/converted
+ * as-is; only the resulting BDT figure is rounded UP to the next whole unit, so
+ * every per-unit figure is whole BDT and the customer, admin and backend never
+ * disagree. Mirrors calculatePrice() in storefront-orders.service.ts.
  *
  * Ceiling is per-unit; quantity multiplies the finished unit price, so a qty of
  * 3 costs exactly 3x one unit (never a re-rounded line total).
@@ -140,14 +141,14 @@ export function baseUnitBdt(
   const source = String(item?.productSourcedFrom || '').trim();
   if (!source) return toNum(item?.price);
 
-  return ceilToWhole(ceilToWhole(item?.price) * rate);
+  return ceilToWhole(toNum(item?.price) * rate);
 }
 
 /**
  * Per-unit BDT, tax included, shipping excluded.
  *
- * Pipeline: ceil the entered price, apply USA tax, convert with the rate, then
- * ceil the BDT result. Pre-stock items are already BDT and pass through.
+ * Pipeline: (price + USA sales tax) * rate, then ceil the BDT result. Pre-stock
+ * items are already BDT and pass through.
  */
 export function unitBdt(
   item: BdtItem,
@@ -165,7 +166,7 @@ export function unitBdt(
   if (!source) return toNum(item?.price);
 
   const pct = taxRatePct(source, item?.usaSalesTax);
-  return ceilToWhole(ceilToWhole(item?.price) * (1 + pct / 100) * rate);
+  return ceilToWhole(toNum(item?.price) * (1 + pct / 100) * rate);
 }
 
 /** Per-unit BDT for shipping. Converted with the rate, never taxed, ceiled. */
@@ -237,8 +238,19 @@ export function breakdownBdt(item: BdtItem, rate: number): ItemMoneyBreakdown {
 /**
  * Compute (but do not persist) the money fields to stamp onto a cart item.
  * Returns a plain patch object; callers merge it into the item document.
+ *
+ * IMPORTANT: this always RE-DERIVES from the item's current price/tax/rate. It
+ * must never consult the priceBdt already stored on the item - that value is
+ * the thing being overwritten, and reading it back here is what used to freeze
+ * an item on its first stamped price so a later admin edit never took effect.
+ * (`breakdownBdt` prefers the stored value because it is a READ-path helper.)
  */
 export function moneyFieldsFor(item: BdtItem, rate: number) {
-  const { priceBdt, taxBdt, shippingBdt: ship } = breakdownBdt(item, rate);
-  return { priceBdt, taxBdt, shippingBdt: ship };
+  const priceBdt = unitBdt(item, rate);
+  const basePriceBdt = baseUnitBdt(item, rate);
+  return {
+    priceBdt,
+    taxBdt: Math.max(0, priceBdt - basePriceBdt),
+    shippingBdt: shippingBdt(item, rate),
+  };
 }

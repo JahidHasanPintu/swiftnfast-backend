@@ -78,6 +78,23 @@ export class NotificationService {
     ctx: NotificationContext,
   ): Promise<void> {
     try {
+      // Cart item Hold / Cancel / Reopen raised from the admin price queue.
+      if (
+        scenario === 'CART_ITEM_HOLD' ||
+        scenario === 'CART_ITEM_CANCELLED' ||
+        scenario === 'CART_ITEM_REOPENED'
+      ) {
+        if (!ctx.customerEmail) return;
+        await this.mailService.sendCartItemStatusEmail(
+          ctx.customerEmail,
+          ctx.customerName || 'Customer',
+          ctx.productName || 'An item in your request',
+          ctx.itemStatus || 'PENDING',
+          { reason: ctx.reason, kind: ctx.kind },
+        );
+        return;
+      }
+
       // Use the existing rich HTML email for order status updates
       if (ctx.orderNumber && ctx.customerName && ctx.status) {
         await this.mailService.sendOrderStatusUpdateEmail(
