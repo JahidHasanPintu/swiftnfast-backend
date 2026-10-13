@@ -219,6 +219,9 @@ export class CartService {
                   generateImageUrl('products', i),
                 )
               : [],
+            featuredImage: product.featuredImage
+              ? generateImageUrl('products', product.featuredImage)
+              : null,
             slug: product.slug,
           };
         }
@@ -430,6 +433,8 @@ export class CartService {
       promoCode?: string;
       category?: string;
       variant?: string;
+      /** Selected variation id when the product has variants. */
+      variationId?: string;
       approximatePrice?: number;
       totalEstimatedPrice?: number;
     },
@@ -462,6 +467,15 @@ export class CartService {
       items[idx].quantity = Number(items[idx].quantity) + qty;
       items[idx].price = price;
       if (body.promoCode) items[idx].promoCode = body.promoCode;
+      // A re-add carries the currently selected variation: refresh the line so
+      // price, variant label and its id always describe what is in the cart.
+      if (type !== 'outside_order') {
+        if (body.variant !== undefined) items[idx].variant = body.variant;
+        if (body.variationId !== undefined)
+          items[idx].variationId = body.variationId;
+        if (body.color !== undefined) items[idx].color = body.color;
+        if (body.size !== undefined) items[idx].size = body.size;
+      }
     } else {
       const item: any = {
         productId: body.productId,
@@ -481,6 +495,12 @@ export class CartService {
         item.variant = body.variant;
         item.approximatePrice = body.approximatePrice;
         item.totalEstimatedPrice = body.totalEstimatedPrice;
+      } else if (body.variant || body.variationId) {
+        // Which variation of the product this line refers to.
+        item.variant = body.variant;
+        item.variationId = body.variationId;
+        if (body.color) item.color = body.color;
+        if (body.size) item.size = body.size;
       }
       items.push(item);
     }

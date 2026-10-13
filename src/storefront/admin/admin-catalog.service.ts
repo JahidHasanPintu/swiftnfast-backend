@@ -206,6 +206,28 @@ export class AdminCatalogService {
     return slug;
   }
 
+  /**
+   * Picks the card image from `featuredIndex` (index into the final images
+   * array, which is `currentImages + uploaded`), then an explicit
+   * `featuredImage` URL, then the previously stored pick, then the first image.
+   */
+  private resolveFeatured(
+    images: string[],
+    body: any,
+    previous?: string,
+  ): string | undefined {
+    const raw = body?.featuredIndex;
+    if (raw !== undefined && raw !== null && raw !== '') {
+      const idx = Number(raw);
+      if (Number.isFinite(idx) && images[idx]) return images[idx];
+    }
+    if (body?.featuredImage && images.includes(String(body.featuredImage))) {
+      return String(body.featuredImage);
+    }
+    if (previous && images.includes(previous)) return previous;
+    return images[0];
+  }
+
   async createProduct(body: any, imageFiles: any[]) {
     if (!body.name) throw new BadRequestException('Product name is required');
     const data: any = {
@@ -242,6 +264,9 @@ export class AdminCatalogService {
     }
     const existing = parseJsonArray(body.images) || [];
     data.images = uploaded.length > 0 ? [...existing, ...uploaded] : existing;
+    data.featuredImage = this.resolveFeatured(data.images, body);
+    data.variationAttributes = parseJsonArray(body.variationAttributes) || [];
+    data.variations = parseJsonArray(body.variations) || [];
 
     const created = await this.productModel.create(data);
     return this.serializeProduct(created.toObject());
@@ -310,6 +335,20 @@ export class AdminCatalogService {
       data.images = bodyImages;
     }
 
+    const finalImages: string[] =
+      data.images !== undefined ? data.images : product.images || [];
+    data.featuredImage = this.resolveFeatured(
+      finalImages,
+      body,
+      product.featuredImage,
+    );
+    if (body.variationAttributes !== undefined) {
+      data.variationAttributes = parseJsonArray(body.variationAttributes) || [];
+    }
+    if (body.variations !== undefined) {
+      data.variations = parseJsonArray(body.variations) || [];
+    }
+
     Object.assign(product, data);
     await product.save();
     return this.serializeProduct(product.toObject());
@@ -333,6 +372,13 @@ export class AdminCatalogService {
       images: Array.isArray(doc.images)
         ? doc.images.map((i: string) => generateImageUrl('products', i))
         : [],
+      featuredImage: doc.featuredImage
+        ? generateImageUrl('products', doc.featuredImage)
+        : null,
+      variationAttributes: Array.isArray(doc.variationAttributes)
+        ? doc.variationAttributes
+        : [],
+      variations: Array.isArray(doc.variations) ? doc.variations : [],
     };
   }
 

@@ -18,6 +18,38 @@ export const ProductSchema = new mongoose.Schema(
     tax: { type: Number, default: 0 },
     pfuCharge: { type: Number, default: 0 },
     images: { type: [String], default: [] },
+    /** Chosen card image (URL or stored filename); falls back to images[0]. */
+    featuredImage: { type: String },
+    variationAttributes: {
+      type: [
+        new mongoose.Schema(
+          {
+            id: { type: String, required: true },
+            name: { type: String, required: true },
+            values: { type: [String], default: [] },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
+    },
+    variations: {
+      type: [
+        new mongoose.Schema(
+          {
+            id: { type: String, required: true },
+            name: { type: String },
+            attributes: { type: mongoose.Schema.Types.Mixed, default: {} },
+            price: { type: Number },
+            discountPrice: { type: Number },
+            stock: { type: Number },
+            sku: { type: String },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
+    },
     isLimitedTimeOffer: { type: Boolean, default: true },
     isFeaturedDailyDeal: { type: Boolean, default: false },
     isTrending: { type: Boolean, default: false },

@@ -16,6 +16,21 @@ export interface ProductDocument extends Document {
   tax: number;
   pfuCharge: number;
   images: any;
+  featuredImage?: string;
+  variationAttributes?: {
+    id: string;
+    name: string;
+    values: string[];
+  }[];
+  variations?: {
+    id: string;
+    name?: string;
+    attributes?: Record<string, string>;
+    price?: number;
+    discountPrice?: number;
+    stock?: number;
+    sku?: string;
+  }[];
   isLimitedTimeOffer: boolean;
   isFeaturedDailyDeal: boolean;
   isTrending: boolean;

@@ -51,6 +51,13 @@ export class StorefrontProductService {
         ? { id: populated._id.toString(), name: populated.name }
         : null,
       images: parseImages(obj.images),
+      featuredImage: obj.featuredImage
+        ? generateImageUrl('products', obj.featuredImage)
+        : null,
+      variationAttributes: Array.isArray(obj.variationAttributes)
+        ? obj.variationAttributes
+        : [],
+      variations: Array.isArray(obj.variations) ? obj.variations : [],
     };
   }
 
@@ -120,7 +127,7 @@ export class StorefrontProductService {
           { description: { $regex: q, $options: 'i' } },
         ],
       })
-      .select('id name brand slug images')
+      .select('id name brand slug images featuredImage')
       .sort({ createdAt: -1 })
       .limit(5)
       .exec();
@@ -129,7 +136,7 @@ export class StorefrontProductService {
       name: r.name,
       brand: r.brand,
       slug: r.slug,
-      image: parseImages(r.images)[0] || null,
+      image: (r.featuredImage && generateImageUrl('products', r.featuredImage)) || parseImages(r.images)[0] || null,
     }));
   }
 
