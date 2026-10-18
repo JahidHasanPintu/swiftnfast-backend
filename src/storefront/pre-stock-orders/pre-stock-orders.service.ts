@@ -298,7 +298,10 @@ export class PreStockOrdersService {
     };
   }) {
     const cart = await this.cartService.getRawCart(body.cartId);
-    const rawItems = (cart.items as any[]) || [];
+    // Cancelled lines are never attached to an order.
+    const rawItems = ((cart.items as any[]) || []).filter(
+      (item: any) => item.adminStatus !== 'CANCELLED',
+    );
 
     if (rawItems.length === 0) {
       throw new BadRequestException('Cart is empty');

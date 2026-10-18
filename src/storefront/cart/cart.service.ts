@@ -235,11 +235,16 @@ export class CartService {
     const outsideItems = enrichedItems.filter(
       (i) => i.type === 'outside_order',
     );
-    // A quote is only orderable once an admin has priced every line. A cart of
+    // A quote is only orderable once an admin has priced every live line.
+    // Cancelled lines are dead weight - they neither need a price nor should
+    // block checkout when the remaining items are priced. A cart of
     // ready-stock products carries its own price, so it is always ready.
+    const liveOutside = outsideItems.filter(
+      (i) => i.adminStatus !== 'CANCELLED',
+    );
     const readyToOrder =
-      outsideItems.length === 0 ||
-      outsideItems.every((i) => i.priceManuallyUpdated === true);
+      liveOutside.length === 0 ||
+      liveOutside.every((i) => i.priceManuallyUpdated === true);
 
     return {
       ...cart,

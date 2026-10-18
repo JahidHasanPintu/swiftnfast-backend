@@ -90,7 +90,11 @@ export class StorefrontOrdersService {
     };
   }) {
     const cart = await this.cartService.getRawCart(body.cartId);
-    const rawItems = (cart.items as any[]) || [];
+    // Cancelled lines are never attached to an order - the customer can still
+    // check out the remaining live items.
+    const rawItems = ((cart.items as any[]) || []).filter(
+      (item: any) => item.adminStatus !== 'CANCELLED',
+    );
 
     // Cart and quote are separate documents, so `kind` is the authority here.
     // The item check stays as a guard for rows written before `kind` existed.
@@ -102,6 +106,11 @@ export class StorefrontOrdersService {
     if (!hasOutsideProducts && rawItems.length > 0) {
       // Ready-stocked products -> prestockorders collection
       return this.preStockOrdersService.createOrder(body);
+    }
+    // Every line was cancelled (or the cart was already empty): there is
+    // nothing left to order.
+    if (rawItems.length === 0) {
+      throw new BadRequestException('Cart is empty');
     }
 
     // Outside products → old Orders collection
