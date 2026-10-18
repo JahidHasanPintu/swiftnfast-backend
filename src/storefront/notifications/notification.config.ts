@@ -111,8 +111,9 @@ export const NOTIFICATION_CONFIG: Record<
   // ─── Order Lifecycle ───────────────────────────────────────────────────
   ORDER_CREATED: {
     email: { enabled: true },
-    sms: { enabled: false },
-    smsTemplate: '',
+    sms: { enabled: true },
+    smsTemplate:
+      'Hi {{customerName}}, your order #{{orderNumber}} has been confirmed and we are processing it now. - PFU2',
     smsPurpose: 'ORDER_STATUS',
   },
 

@@ -343,7 +343,7 @@ export class PreStockOrdersService {
         totalPrice: total,
         advancePayment: 0,
         remainingAmount: total,
-        status: 'PENDING',
+        status: 'PROCESSING',
         productSourcedFrom: item.productSourcedFrom,
         orderNotes: item.notes,
         couponCode: cart.couponCode || item.promoCode,
@@ -480,7 +480,7 @@ export class PreStockOrdersService {
         advancePayment: advanceAmount,
         remainingAmount: Number((payableTotal - advanceAmount).toFixed(2)),
         mfsPayment,
-        status: 'PENDING',
+        status: 'PROCESSING',
         paymentStatus,
       });
 
@@ -513,6 +513,18 @@ export class PreStockOrdersService {
       orderNumber,
       customerName: shippingName,
     });
+
+    // Confirmation email + SMS: order is confirmed and now processing.
+    this.notificationService
+      .notify('ORDER_CREATED', {
+        customerName: shippingName,
+        customerEmail: shippingEmail,
+        customerPhone: shippingPhone,
+        orderNumber,
+        totalPrice: payableTotal,
+        status: 'PROCESSING',
+      })
+      .catch(() => undefined);
 
     return order.toObject();
   }

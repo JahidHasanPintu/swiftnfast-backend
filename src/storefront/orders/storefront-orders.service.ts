@@ -209,7 +209,7 @@ export class StorefrontOrdersService {
         origin: productSourcedFrom || 'Bangladesh',
         couponCode: cart.couponCode || item.promoCode,
         ssImageUrl: item.ssImageUrl,
-        status: 'PENDING',
+        status: 'PROCESSING',
         userId,
         isGuest: body.isGuest === true || !userId,
         guestEmail: body.guestEmail || shippingEmail,
@@ -378,6 +378,18 @@ export class StorefrontOrdersService {
       customerName: shippingName,
     });
 
+    // Confirmation email + SMS: order is confirmed and now processing.
+    this.notificationService
+      .notify('ORDER_CREATED', {
+        customerName: shippingName,
+        customerEmail: shippingEmail,
+        customerPhone: shippingPhone,
+        orderNumber,
+        totalPrice: payableTotal,
+        status: 'PROCESSING',
+      })
+      .catch(() => undefined);
+
     return { id: orderNumber, orderNumber, ...order };
   }
 
@@ -468,7 +480,7 @@ export class StorefrontOrdersService {
       remainingAmount: estimation.totalEstimatedPrice,
       orderNotes: body.notes,
       origin: body.productSourcedFrom,
-      status: 'Pending',
+      status: 'PROCESSING',
       couponCode: body.promoCode,
       userId,
       approximatePrice: estimation.approximatePrice,
@@ -488,6 +500,18 @@ export class StorefrontOrdersService {
       orderNumber,
       customerName: customer.customerName,
     });
+
+    // Confirmation email + SMS: order is confirmed and now processing.
+    this.notificationService
+      .notify('ORDER_CREATED', {
+        customerName: customer.customerName,
+        customerEmail: customer.emailAddress,
+        customerPhone: customer.contactNumber,
+        orderNumber,
+        totalPrice: estimation.totalEstimatedPrice,
+        status: 'PROCESSING',
+      })
+      .catch(() => undefined);
 
     return { id: created._id, orderNumber, ...created.toObject() };
   }
