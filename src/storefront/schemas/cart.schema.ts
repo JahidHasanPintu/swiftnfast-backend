@@ -67,6 +67,7 @@ export const CartSchema = new mongoose.Schema(
       default: 'cart',
     },
     guestContact: { type: String },
+    guestEmail: { type: String },
     isRequested: { type: Boolean, default: false },
     isRead: { type: Boolean, default: false },
     requestedAt: { type: Date },

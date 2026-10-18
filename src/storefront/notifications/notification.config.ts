@@ -96,7 +96,7 @@ export const NOTIFICATION_CONFIG: Record<
     email: { enabled: true },
     sms: { enabled: true },
     smsTemplate:
-      'Hi {{customerName}}, "{{productName}}" in your request has been cancelled.{{reasonText}} Please contact support if you have questions. - PFU2',
+      'Hi {{customerName}}, "{{productName}}" in your request has been cancelled."{{reasonText}}".  If you have questions, Please contact support 09678882888, 01613-333011 - PFU2',
     smsPurpose: 'CART_STATUS',
   },
 

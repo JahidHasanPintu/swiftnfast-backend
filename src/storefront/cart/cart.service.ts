@@ -642,7 +642,7 @@ export class CartService {
 
   async requestPrice(
     id: string,
-    body: { isRequested?: boolean; guestContact?: string },
+    body: { isRequested?: boolean; guestContact?: string; guestEmail?: string },
   ) {
     const cart = await this.cartModel.findById(id).exec();
     if (!cart) return null;
@@ -653,6 +653,7 @@ export class CartService {
       cart.isRead = false;
     }
     if (body.guestContact !== undefined) cart.guestContact = body.guestContact;
+    if (body.guestEmail !== undefined) cart.guestEmail = body.guestEmail;
     await cart.save();
     return this.enrich(cart);
   }

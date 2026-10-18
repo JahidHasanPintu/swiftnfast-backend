@@ -98,13 +98,15 @@ export class CartController {
   async updateItem(@Param('id') id: string, @Body() body: any) {
     const data = await this.cartService.updateItem(id, body);
 
-    // Send email + SMS notification if cart is now ready to order
-    if (data.readyToOrder && data.user) {
-      const customerName = data.user.name || 'Customer';
+    // Send email + SMS notification if cart is now ready to order.
+    // Guests leave their contact on the price request, so they get the same
+    // update as signed-in users.
+    if (data.readyToOrder && (data.user || data.guestContact || data.guestEmail)) {
+      const customerName = data.user?.name || data.guestContact || 'Guest';
       this.notificationService.notify('PRICE_UPDATED', {
         customerName,
-        customerEmail: data.user.email,
-        customerPhone: data.user.phone || data.user.contactNumber,
+        customerEmail: data.user?.email || data.guestEmail,
+        customerPhone: data.user?.phone || data.user?.contactNumber || data.guestContact,
         cartId: id,
       });
     }

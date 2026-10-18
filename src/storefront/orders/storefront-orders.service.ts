@@ -111,7 +111,10 @@ export class StorefrontOrdersService {
     const shippingName = shipping.name;
     const shippingPhone =
       shipping.phone || body.guestContact || cart.guestContact;
-    const shippingEmail = shipping.email || body.guestEmail;
+    // Quote guests leave their email on the price request; keep it as the
+    // last fallback so order notifications always have a reachable address.
+    const shippingEmail =
+      shipping.email || body.guestEmail || cart.guestEmail;
     const shippingAddressText = shipping.shippingAddress || shipping.address;
 
     const customer = await this.ordersService.findOrCreateCustomerByContact(

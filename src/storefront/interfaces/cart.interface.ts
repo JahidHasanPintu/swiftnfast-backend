@@ -46,6 +46,8 @@ export interface Cart {
   /** 'cart' = ready-stock catalogue products, 'quote' = outside_order items. */
   kind?: BasketKind;
   guestContact?: string;
+  /** Guest email collected with the final-price request. */
+  guestEmail?: string;
   isRequested?: boolean;
   isRead?: boolean;
   requestedAt?: Date;
