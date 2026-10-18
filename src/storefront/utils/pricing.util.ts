@@ -92,6 +92,9 @@ export interface BdtItem {
   finalPrice?: string | number | null;
   priceManuallyUpdated?: boolean;
   usaSalesTax?: number | string | null;
+  /** Final tax MONEY per unit in the source currency. When > 0 it replaces the
+   * percentage-derived tax: (price + taxAmount) is what gets converted. */
+  taxAmount?: number | string | null;
   shippingCost?: number | string | null;
   productSourcedFrom?: string | null;
 }
@@ -135,7 +138,14 @@ export function baseUnitBdt(
 
   if (opts.useManualFinalPrice !== false && item?.priceManuallyUpdated) {
     const manual = toNum(item?.finalPrice);
-    if (manual > 0) return manual;
+    if (manual > 0) {
+      // A hand-tuned taxAmount means the admin knows the exact tax portion of
+      // their finalPrice, so base = final - tax (in BDT). Otherwise the split
+      // is unknowable and base is the full manual price (tax reported as 0).
+      const tax = toNum((item as any)?.taxAmount);
+      if (tax > 0) return Math.max(0, manual - ceilToWhole(tax * rate));
+      return manual;
+    }
   }
 
   const source = String(item?.productSourcedFrom || '').trim();
@@ -164,6 +174,13 @@ export function unitBdt(
 
   const source = String(item?.productSourcedFrom || '').trim();
   if (!source) return toNum(item?.price);
+
+  // A hand-tuned tax MONEY amount replaces the percentage-derived tax:
+  // BDT = ceil((price + taxAmount) * rate).
+  const tax = toNum((item as any)?.taxAmount);
+  if (tax > 0) {
+    return ceilToWhole((toNum(item?.price) + tax) * rate);
+  }
 
   const pct = taxRatePct(source, item?.usaSalesTax);
   return ceilToWhole(toNum(item?.price) * (1 + pct / 100) * rate);

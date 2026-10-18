@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -25,7 +26,10 @@ import { CartService } from './cart.service';
 import { MailService } from '../mail/mail.service';
 import { EventsGateway } from '../../common/gateways/events.gateway';
 import { NotificationService } from '../notifications/notification.service';
-import { resolveCartItemScenario } from '../notifications/notification.config';
+import {
+  resolveCartItemScenario,
+  NotificationScenario,
+} from '../notifications/notification.config';
 
 @Public()
 @Controller('api/v1')
@@ -100,15 +104,24 @@ export class CartController {
 
     // Send email + SMS notification if cart is now ready to order.
     // Guests leave their contact on the price request, so they get the same
-    // update as signed-in users.
+    // update as signed-in users. Fire-and-forget, but the SMS outcome is
+    // persisted so the admin modal can show it and offer a manual re-send.
     if (data.readyToOrder && (data.user || data.guestContact || data.guestEmail)) {
       const customerName = data.user?.name || data.guestContact || 'Guest';
-      this.notificationService.notify('PRICE_UPDATED', {
-        customerName,
-        customerEmail: data.user?.email || data.guestEmail,
-        customerPhone: data.user?.phone || data.user?.contactNumber || data.guestContact,
-        cartId: id,
-      });
+      this.notificationService
+        .notify('PRICE_UPDATED', {
+          customerName,
+          customerEmail: data.user?.email || data.guestEmail,
+          customerPhone: data.user?.phone || data.user?.contactNumber || data.guestContact,
+          cartId: id,
+        })
+        .then((result) =>
+          this.cartService.recordSmsStatus(
+            id,
+            result.sms === 'sent' ? 'SUCCESS' : result.sms === 'failed' ? 'FAILED' : null,
+          ),
+        )
+        .catch(() => {});
     }
 
     return { success: true, message: 'Cart item updated successfully', data };
@@ -170,24 +183,33 @@ export class CartController {
           (i.type || 'product') === (body.type || 'product'),
       );
       const reason = String(body.reason || item?.adminReason || '').trim();
-      const customerEmail = data.user?.email;
+      const customerEmail = data.user?.email || data.guestEmail;
       const customerPhone = data.user?.phone || data.guestContact;
       const productName =
         item?.product?.name || item?.name || 'An item in your request';
 
       if (customerEmail || customerPhone) {
-        // Fire-and-forget: notify() never throws and already logs failures.
-        this.notificationService.notify(scenario, {
-          customerName: data.user?.name || data.guestContact || 'Customer',
-          customerEmail,
-          customerPhone,
-          cartId: id,
-          productName,
-          itemStatus: status,
-          reason,
-          reasonText: reason ? ` Reason: ${reason}` : '',
-          kind: data.kind,
-        });
+        // Fire-and-forget: notify() never throws; the SMS outcome is stored
+        // on the cart so the admin can see it and re-send if it failed.
+        this.notificationService
+          .notify(scenario, {
+            customerName: data.user?.name || data.guestContact || 'Customer',
+            customerEmail,
+            customerPhone,
+            cartId: id,
+            productName,
+            itemStatus: status,
+            reason,
+            reasonText: reason ? ` Reason: ${reason}` : '',
+            kind: data.kind,
+          })
+          .then((result) =>
+            this.cartService.recordSmsStatus(
+              id,
+              result.sms === 'sent' ? 'SUCCESS' : result.sms === 'failed' ? 'FAILED' : null,
+            ),
+          )
+          .catch(() => {});
       }
     }
 
@@ -196,6 +218,39 @@ export class CartController {
       message: 'Cart item status updated successfully',
       data,
     };
+  }
+
+  /**
+   * Manually (re)send a customer notification for a cart - used from the
+   * admin price-queue modal when the automatic SMS/email did not go out.
+   * Body: { scenario: 'PRICE_UPDATED' | 'CART_ITEM_HOLD' | 'CART_ITEM_CANCELLED' |
+   *         'CART_ITEM_REOPENED', productId?, type?, reason? }
+   */
+  @Post('cart/:id/send-notification')
+  @UseGuards(JwtAuthGuard)
+  async sendNotification(@Param('id') id: string, @Body() body: any) {
+    const allowed: NotificationScenario[] = [
+      'PRICE_UPDATED',
+      'CART_ITEM_HOLD',
+      'CART_ITEM_CANCELLED',
+      'CART_ITEM_REOPENED',
+    ];
+    const scenario = String(body?.scenario || '') as NotificationScenario;
+    if (!allowed.includes(scenario)) {
+      throw new BadRequestException(
+        `Invalid scenario. Allowed: ${allowed.join(', ')}`,
+      );
+    }
+    const { result, cart } = await this.cartService.sendCartNotification(
+      id,
+      scenario,
+      body,
+    );
+    const message =
+      result.sms === 'sent' || result.email === 'sent'
+        ? 'Notification sent'
+        : 'Notification failed to send';
+    return { success: result.sms === 'sent' || result.email === 'sent', message, data: { result, cart } };
   }
 
   // ---- Customer-facing cart (storefront token / guest token) --------------

@@ -3,6 +3,7 @@ import { getModelToken, getConnectionToken } from '@nestjs/mongoose';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { OrderService } from './order.service';
+import { NotificationService } from 'src/storefront/notifications/notification.service';
 
 describe('OrderService', () => {
   let service: OrderService;
@@ -33,6 +34,15 @@ describe('OrderService', () => {
         { provide: getModelToken('Orders'), useValue: orderModel },
         { provide: getModelToken('Payments'), useValue: paymentModel },
         { provide: getConnectionToken(), useValue: connection },
+        {
+          provide: NotificationService,
+          useValue: {
+            notify: jest.fn().mockResolvedValue({ email: 'skipped', sms: 'skipped' }),
+            notifyStatusChange: jest
+              .fn()
+              .mockResolvedValue({ email: 'skipped', sms: 'skipped' }),
+          },
+        },
       ],
     }).compile();
 

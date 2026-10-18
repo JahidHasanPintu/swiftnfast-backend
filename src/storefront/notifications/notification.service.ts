@@ -19,6 +19,11 @@ export interface NotificationContext {
   [key: string]: any;
 }
 
+export interface NotifyResult {
+  email: 'sent' | 'failed' | 'skipped';
+  sms: 'sent' | 'failed' | 'skipped';
+}
+
 @Injectable()
 export class NotificationService {
   private readonly logger = new Logger('NotificationService');
@@ -30,31 +35,45 @@ export class NotificationService {
 
   /**
    * Send notification (email + SMS) for a given scenario.
-   * Non-blocking: errors are logged but never thrown.
+   * Never throws; per-channel outcome is returned so callers (e.g. the cart
+   * price queue) can persist an SMS status the admin can see and retry.
    */
   async notify(
     scenario: NotificationScenario,
     ctx: NotificationContext,
-  ): Promise<void> {
+  ): Promise<NotifyResult> {
+    const result: NotifyResult = { email: 'skipped', sms: 'skipped' };
     const config = NOTIFICATION_CONFIG[scenario];
     if (!config) {
       this.logger.warn(`No notification config for scenario: ${scenario}`);
-      return;
+      return result;
     }
 
-    const tasks: Promise<any>[] = [];
+    const tasks: Promise<{ channel: 'email' | 'sms'; ok: boolean }>[] = [];
 
     // ─── Email ───────────────────────────────────────────────────────────
     if (config.email.enabled && ctx.customerEmail) {
-      tasks.push(this.sendEmail(scenario, ctx));
+      tasks.push(
+        this.sendEmail(scenario, ctx).then((ok) => ({ channel: 'email' as const, ok })),
+      );
     }
 
     // ─── SMS ─────────────────────────────────────────────────────────────
     if (config.sms.enabled && config.smsTemplate && ctx.customerPhone) {
-      tasks.push(this.sendSms(config.smsTemplate, config.smsPurpose, ctx));
+      tasks.push(
+        this.sendSms(config.smsTemplate, config.smsPurpose, ctx).then((ok) => ({
+          channel: 'sms' as const,
+          ok,
+        })),
+      );
     }
 
-    await Promise.allSettled(tasks);
+    const settled = await Promise.allSettled(tasks);
+    for (const s of settled) {
+      if (s.status === 'rejected') continue;
+      result[s.value.channel] = s.value.ok ? 'sent' : 'failed';
+    }
+    return result;
   }
 
   /**
@@ -64,11 +83,11 @@ export class NotificationService {
   async notifyStatusChange(
     status: string,
     ctx: NotificationContext,
-  ): Promise<void> {
+  ): Promise<NotifyResult> {
     const scenario = resolveScenario(status);
     if (!scenario) {
       this.logger.debug(`No notification scenario for status: ${status}`);
-      return;
+      return { email: 'skipped', sms: 'skipped' };
     }
     return this.notify(scenario, ctx);
   }
@@ -76,7 +95,7 @@ export class NotificationService {
   private async sendEmail(
     scenario: NotificationScenario,
     ctx: NotificationContext,
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
       // Cart item Hold / Cancel / Reopen raised from the admin price queue.
       if (
@@ -84,7 +103,7 @@ export class NotificationService {
         scenario === 'CART_ITEM_CANCELLED' ||
         scenario === 'CART_ITEM_REOPENED'
       ) {
-        if (!ctx.customerEmail) return;
+        if (!ctx.customerEmail) return false;
         await this.mailService.sendCartItemStatusEmail(
           ctx.customerEmail,
           ctx.customerName || 'Customer',
@@ -92,7 +111,7 @@ export class NotificationService {
           ctx.itemStatus || 'PENDING',
           { reason: ctx.reason, kind: ctx.kind },
         );
-        return;
+        return true;
       }
 
       // Use the existing rich HTML email for order status updates
@@ -104,7 +123,7 @@ export class NotificationService {
           ctx.status,
           ctx.totalPrice,
         );
-        return;
+        return true;
       }
 
       // Price updated email
@@ -114,7 +133,7 @@ export class NotificationService {
           ctx.customerName,
           ctx.cartId,
         );
-        return;
+        return true;
       }
 
       // Order created / payment success email
@@ -124,12 +143,14 @@ export class NotificationService {
           ctx.orderNumber,
           String(ctx.totalPrice),
         );
-        return;
+        return true;
       }
+      return false;
     } catch (err) {
       this.logger.error(
         `Email notification failed [${scenario}] to ${ctx.customerEmail}: ${err.message}`,
       );
+      return false;
     }
   }
 
@@ -137,7 +158,7 @@ export class NotificationService {
     template: string,
     purpose: string,
     ctx: NotificationContext,
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
       const message = this.renderTemplate(template, ctx);
       const result = await this.smsService.sendSms(
@@ -150,10 +171,12 @@ export class NotificationService {
           `SMS delivery failed [${purpose}] to ${ctx.customerPhone}: code=${result.code}`,
         );
       }
+      return result.success;
     } catch (err) {
       this.logger.error(
         `SMS notification failed [${purpose}] to ${ctx.customerPhone}: ${err.message}`,
       );
+      return false;
     }
   }
 

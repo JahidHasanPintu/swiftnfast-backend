@@ -36,6 +36,11 @@ export const CartItemSchema = new mongoose.Schema(
     // USA sales tax RATE as a percentage (e.g. 10 = 10%). Null/undefined means
     // the DEFAULT_USA_TAX_PCT default applies. Not a money amount.
     usaSalesTax: { type: Number, default: null },
+    // Final sales-tax MONEY amount per unit, in the source currency. Set by the
+    // admin editing the calculated tax amount in the price queue. When > 0 it
+    // overrides the percentage-derived tax (price + taxAmount is what gets
+    // converted to BDT), so an admin can hand-tune the exact tax charged.
+    taxAmount: { type: Number, default: null },
     // Shipping cost in the source currency. Converted to BDT, never taxed.
     shippingCost: { type: Number, default: 0 },
     // --- Persisted money breakdown (per unit, BDT) ---------------------
@@ -82,6 +87,11 @@ export const CartSchema = new mongoose.Schema(
     couponCode: { type: String }, // set while a coupon is applied
     totalPrice: { type: Number, default: 0 },
     updatedBy: { type: String },
+    // Last customer SMS outcome for the price queue (PRICE_UPDATED / cancel /
+    // hold). SUCCESS | FAILED | null (never sent). Shown in the admin cart
+    // modal so a failed SMS can be re-sent manually.
+    smsStatus: { type: String, default: null },
+    smsAt: { type: Date, default: null },
   },
   { timestamps: true },
 );

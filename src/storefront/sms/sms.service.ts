@@ -13,19 +13,47 @@ export interface SmsSendResult {
 @Injectable()
 export class SmsService {
   private readonly logger = new Logger('SmsService');
-  private readonly apiKey: string;
-  private readonly senderId: string;
-  private readonly baseUrl: string;
 
   constructor(
     private readonly config: ConfigService,
     @InjectModel('SmsLog')
     private readonly smsLogModel: Model<any>,
-  ) {
-    this.apiKey = this.config.get<string>('SMS_API_KEY') || '';
-    this.senderId = this.config.get<string>('SMS_SENDER_ID') || 'PFU2';
-    this.baseUrl =
-      this.config.get<string>('SMS_BASE_URL') || 'http://bulksmsbd.net/api';
+    @InjectModel('Setting')
+    private readonly settingModel: Model<any>,
+  ) {}
+
+  /**
+   * Admin Settings (DB) win over env vars. The SMS Gateway page in the admin
+   * panel saves sms_api_key / sms_sender_id / sms_base_url to the Settings
+   * collection; sending used to read env only, so a key saved via the panel
+   * was silently ignored and every SMS failed with BulkSMSBD code != 202.
+   */
+  private async resolveConfig(): Promise<{
+    apiKey: string;
+    senderId: string;
+    baseUrl: string;
+  }> {
+    let settings: Record<string, string> = {};
+    try {
+      const rows = await this.settingModel
+        .find({
+          key: { $in: ['sms_api_key', 'sms_sender_id', 'sms_base_url'] },
+        })
+        .lean()
+        .exec();
+      for (const row of rows || []) settings[row.key] = String(row.value ?? '');
+    } catch (err) {
+      this.logger.warn(`Failed to read SMS settings, falling back to env: ${err.message}`);
+    }
+    return {
+      apiKey: settings['sms_api_key'] || this.config.get<string>('SMS_API_KEY') || '',
+      senderId:
+        settings['sms_sender_id'] || this.config.get<string>('SMS_SENDER_ID') || 'PFU2',
+      baseUrl:
+        settings['sms_base_url'] ||
+        this.config.get<string>('SMS_BASE_URL') ||
+        'http://bulksmsbd.net/api',
+    };
   }
 
   async sendSms(
@@ -40,12 +68,13 @@ export class SmsService {
     let status: 'SUCCESS' | 'FAILED' | 'PENDING' = 'PENDING';
 
     try {
-      const url = `${this.baseUrl}/smsapi`;
+      const { apiKey, senderId, baseUrl } = await this.resolveConfig();
+      const url = `${baseUrl}/smsapi`;
       const params = {
-        api_key: this.apiKey,
+        api_key: apiKey,
         type: 'text',
         number,
-        senderid: this.senderId,
+        senderid: senderId,
         message,
       };
 
@@ -114,9 +143,10 @@ export class SmsService {
   }
 
   async getBalance(): Promise<any> {
-    const url = `${this.baseUrl}/getBalanceApi`;
+    const { apiKey, baseUrl } = await this.resolveConfig();
+    const url = `${baseUrl}/getBalanceApi`;
     const { data } = await axios.get(url, {
-      params: { api_key: this.apiKey },
+      params: { api_key: apiKey },
       timeout: 10000,
     });
     return data;

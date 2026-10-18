@@ -10,6 +10,8 @@ import { CartDocument, BasketKind } from '../interfaces/cart.interface';
 import { generateImageUrl } from '../utils/image-url.util';
 import { SettingsService } from '../settings/settings.service';
 import { CouponsService } from '../coupons/coupons.service';
+import { NotificationService } from '../notifications/notification.service';
+import { NotificationScenario } from '../notifications/notification.config';
 import {
   breakdownBdt,
   moneyFieldsFor,
@@ -83,6 +85,7 @@ export class CartService {
     @InjectModel('Product') private readonly productModel: Model<any>,
     private readonly settingsService: SettingsService,
     private readonly couponsService: CouponsService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   /**
@@ -528,6 +531,12 @@ export class CartService {
       type?: string;
       /** USA sales tax RATE as a percentage (e.g. 10 = 10%). Not money. */
       usaSalesTax?: number | null;
+      /**
+       * Final sales-tax MONEY per unit in the source currency. When > 0 it
+       * replaces the percentage-derived tax in BDT pricing, letting the admin
+       * hand-tune the exact tax charged.
+       */
+      taxAmount?: number | null;
       shippingCost?: number;
       updatedBy?: string;
     },
@@ -552,6 +561,24 @@ export class CartService {
     } else if (body.finalPrice !== undefined) {
       items[idx].finalPrice = toFixed2(Number(body.finalPrice));
       items[idx].priceManuallyUpdated = true;
+    }
+    if (body.usaSalesTax !== undefined) {
+      // `usaSalesTax` is a PERCENTAGE RATE (e.g. 10 = 10%), not a money
+      // amount. A blank / non-numeric / non-positive value is stored as null so
+      // the default rate applies instead of being pinned to 0.
+      const rate = Number(body.usaSalesTax);
+      items[idx].usaSalesTax =
+        Number.isFinite(rate) && rate > 0 ? toFixed2(rate) : null;
+    }
+    if (body.taxAmount !== undefined) {
+      // Hand-tuned tax MONEY amount (source currency). Null/0 clears the
+      // override so the percentage-derived tax applies again.
+      const amt = Number(body.taxAmount);
+      items[idx].taxAmount =
+        Number.isFinite(amt) && amt > 0 ? toFixed2(amt) : null;
+    }
+    if (body.shippingCost !== undefined) {
+      items[idx].shippingCost = toFixed2(Number(body.shippingCost));
     }
     if (body.usaSalesTax !== undefined) {
       // `usaSalesTax` is a PERCENTAGE RATE (e.g. 10 = 10%), not a money
@@ -693,6 +720,82 @@ export class CartService {
     cart.items = items;
     await cart.save();
     return { ...(await this.enrich(cart)), previousAdminStatus };
+  }
+
+  /**
+   * Persist the outcome of the last customer SMS for this cart so the admin
+   * price queue can show it and offer a manual re-send when it failed.
+   */
+  async recordSmsStatus(
+    id: string,
+    status: 'SUCCESS' | 'FAILED' | null,
+  ): Promise<void> {
+    await this.cartModel
+      .updateOne({ _id: id }, { $set: { smsStatus: status, smsAt: new Date() } })
+      .exec();
+  }
+
+  /**
+   * Manually (re)send a price-queue notification to the cart's customer.
+   * Called from the admin modal buttons when the automatic SMS was not sent
+   * (no phone, provider failure, etc.).
+   */
+  async sendCartNotification(
+    id: string,
+    scenario: NotificationScenario,
+    body: { productId?: string; type?: string; reason?: string } = {},
+  ) {
+    const data = await this.getById(id);
+    if (!data) throw new NotFoundException('Cart not found');
+
+    const customerEmail = data.user?.email || data.guestEmail;
+    const customerPhone =
+      data.user?.phone || data.user?.contactNumber || data.guestContact;
+    if (!customerEmail && !customerPhone) {
+      throw new BadRequestException(
+        'No customer contact (email/phone) available for this cart',
+      );
+    }
+
+    let ctx: any = {
+      customerName: data.user?.name || data.guestContact || 'Guest',
+      customerEmail,
+      customerPhone,
+      cartId: id,
+      kind: data.kind,
+    };
+
+    if (
+      scenario === 'CART_ITEM_HOLD' ||
+      scenario === 'CART_ITEM_CANCELLED' ||
+      scenario === 'CART_ITEM_REOPENED'
+    ) {
+      const item = (data.items || []).find(
+        (i: any) =>
+          String(i.productId) === String(body.productId ?? '') &&
+          (i.type || 'product') === (body.type || 'product'),
+      );
+      const status =
+        scenario === 'CART_ITEM_HOLD'
+          ? 'HOLD'
+          : scenario === 'CART_ITEM_CANCELLED'
+            ? 'CANCELLED'
+            : 'PENDING';
+      const reason = String(body.reason || item?.adminReason || '').trim();
+      ctx = {
+        ...ctx,
+        productName:
+          item?.product?.name || item?.name || 'An item in your request',
+        itemStatus: status,
+        reason,
+        reasonText: reason ? ` Reason: ${reason}` : '',
+      };
+    }
+
+    const result = await this.notificationService.notify(scenario, ctx);
+    await this.recordSmsStatus(id, result.sms === 'sent' ? 'SUCCESS' : 'FAILED');
+    const refreshed = await this.getById(id);
+    return { result, cart: refreshed };
   }
 
   async removeItem(id: string, productType: string, productId: string) {
