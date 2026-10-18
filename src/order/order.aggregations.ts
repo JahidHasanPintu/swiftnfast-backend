@@ -98,6 +98,21 @@ export function buildOrderGroupingStages(): PipelineStage.FacetPipelineStage[] {
         preserveNullAndEmptyArrays: true,
       },
     },
+    // Attach the Payments record (keyed by order number) so the admin order
+    // list can show gateway/payment details without a second round-trip.
+    {
+      $lookup: {
+        from: 'payments',
+        localField: '_id',
+        foreignField: 'orderId',
+        as: 'paymentRecord',
+      },
+    },
+    {
+      $addFields: {
+        paymentRecord: { $arrayElemAt: ['$paymentRecord', 0] },
+      },
+    },
     {
       $replaceRoot: {
         newRoot: {
@@ -131,6 +146,26 @@ export function buildOrderGroupingStages(): PipelineStage.FacetPipelineStage[] {
           createdAt: '$latestOrder.createdAt',
           updatedAt: '$latestOrder.updatedAt',
           customer: { $ifNull: ['$customer', null] },
+          paymentDetails: {
+            $cond: {
+              if: '$paymentRecord',
+              then: {
+                method: '$paymentRecord.method',
+                phoneNumber: '$paymentRecord.phoneNumber',
+                transactionId: '$paymentRecord.transactionId',
+                transactionStatus: '$paymentRecord.transactionStatus',
+                statusMessage: '$paymentRecord.statusMessage',
+                amount: '$paymentRecord.amount',
+                paymentStatus: '$paymentRecord.paymentStatus',
+                paymentSource: '$paymentRecord.paymentSource',
+                cashPayment: '$paymentRecord.cashPayment',
+                mfsPayment: '$paymentRecord.mfsPayment',
+                bankPayment: '$paymentRecord.bankPayment',
+                paidAt: '$paymentRecord.createdAt',
+              },
+              else: null,
+            },
+          },
         },
       },
     },
