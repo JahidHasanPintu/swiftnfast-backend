@@ -38,14 +38,22 @@ export function buildOrderGroupingStages(): PipelineStage.FacetPipelineStage[] {
             then: 'Pending',
             else: {
               $cond: {
-                if: {
-                  $and: [
-                    { $in: ['cancelled', '$statuses'] },
-                    { $not: { $in: ['pending', '$statuses'] } },
-                  ],
+                // New storefront orders are created as PROCESSING; they stay
+                // Processing until an admin actually purchases the lines.
+                if: { $in: ['processing', '$statuses'] },
+                then: 'Processing',
+                else: {
+                  $cond: {
+                    if: {
+                      $and: [
+                        { $in: ['cancelled', '$statuses'] },
+                        { $not: { $in: ['pending', '$statuses'] } },
+                      ],
+                    },
+                    then: 'Cancelled',
+                    else: 'Purchased',
+                  },
                 },
-                then: 'Cancelled',
-                else: 'Purchased',
               },
             },
           },
