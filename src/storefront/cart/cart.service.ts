@@ -988,14 +988,23 @@ export class CartService {
   }
 
   async getRequestedCartCount() {
+    // Only quotes still awaiting an admin price are "pending". Quotes whose
+    // live lines are all priced stay in the admin list but must not keep the
+    // sidebar badge alive, otherwise it shows the entire quote history.
     const cartCount = await this.cartModel
       .countDocuments({
         kind: 'quote',
         isRequested: true,
         'items.0': { $exists: true },
+        items: {
+          $elemMatch: {
+            adminStatus: { $ne: 'CANCELLED' },
+            priceManuallyUpdated: { $ne: true },
+          },
+        },
       })
       .exec();
-    // orderCount mirrors pfu2: count of requested quotes (no separate order notion here)
+    // orderCount mirrors pfu2: count of pending quotes (no separate order notion here)
     const orderCount = cartCount;
     return { cartCount, orderCount };
   }
