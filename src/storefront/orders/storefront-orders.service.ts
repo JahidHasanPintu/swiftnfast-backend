@@ -1342,18 +1342,30 @@ export class StorefrontOrdersService {
   // Pending counts for admin sidebar badges
   // -------------------------------------------------------------------------
   async getPendingWebsiteOrderCount(): Promise<number> {
-    // Count pending orders that are NOT prestock (import orders from website)
-    // Also includes old orders without orderType field
-    return this.orderModel
-      .countDocuments({
-        $or: [
-          { orderType: { $ne: 'prestock' } },
-          { orderType: { $exists: false } },
-          { orderType: null },
-        ],
-        status: { $in: ['PENDING', 'Pending'] },
-      })
+    // One customer order is stored as one document per line item, so counting
+    // raw documents overstates orders (e.g. 44 lines for 21 actual orders).
+    // Count distinct order numbers instead, matching the grouped admin list.
+    const result = await this.orderModel
+      .aggregate([
+        {
+          $match: {
+            $or: [
+              { orderType: { $ne: 'prestock' } },
+              { orderType: { $exists: false } },
+              { orderType: null },
+            ],
+            status: { $in: ['PENDING', 'Pending'] },
+          },
+        },
+        {
+          $group: {
+            _id: { $ifNull: ['$orderNumber', '$orderId'] },
+          },
+        },
+        { $count: 'total' },
+      ])
       .exec();
+    return result[0]?.total || 0;
   }
 
   async getPendingPreStockOrderCount(): Promise<number> {
