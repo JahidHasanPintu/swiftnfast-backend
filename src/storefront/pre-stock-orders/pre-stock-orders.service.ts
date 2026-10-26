@@ -10,6 +10,7 @@ import { CartService } from '../cart/cart.service';
 import { CouponsService } from '../coupons/coupons.service';
 import { EventsGateway } from '../../common/gateways/events.gateway';
 import { NotificationService } from '../notifications/notification.service';
+import { AdminNotificationsService } from '../notifications/admin-notifications.service';
 import { SettingsService } from '../settings/settings.service';
 import { resolveRate, shippingBdt, unitBdt } from '../utils/pricing.util';
 import { generateImageUrl } from '../utils/image-url.util';
@@ -35,6 +36,7 @@ export class PreStockOrdersService {
     private readonly cartService: CartService,
     private readonly eventsGateway: EventsGateway,
     private readonly notificationService: NotificationService,
+    private readonly adminNotifications: AdminNotificationsService,
     private readonly settingsService: SettingsService,
     private readonly couponsService: CouponsService,
   ) {}
@@ -511,6 +513,16 @@ export class PreStockOrdersService {
     }
 
     await this.cartService.deleteById(body.cartId);
+
+    await this.adminNotifications
+      .create({
+        type: 'prestock_order',
+        title: 'New pre-stock order',
+        message: `${shippingName || 'Customer'} placed order ${orderNumber}`,
+        referenceId: orderNumber,
+        link: '/dashboard/pfu2/pre-stock-orders',
+      })
+      .catch(() => undefined);
 
     this.eventsGateway.notifyNewPreStockOrder({
       orderNumber,

@@ -7,6 +7,7 @@ import { CartModule } from '../cart/cart.module';
 import { CouponsModule } from '../coupons/coupons.module';
 import { MailModule } from '../mail/mail.module';
 import { NotificationModule } from '../notifications/notification.module';
+import { AdminNotificationsModule } from '../notifications/admin-notifications.module';
 import { PreStockOrdersModule } from '../pre-stock-orders/pre-stock-orders.module';
 import { SettingsModule } from '../settings/settings.module';
 import { StorefrontOrdersService } from './storefront-orders.service';
@@ -22,6 +23,7 @@ import { StorefrontOrdersController } from './storefront-orders.controller';
     StorageModule,
     MailModule,
     NotificationModule,
+    AdminNotificationsModule,
     PreStockOrdersModule,
     SettingsModule,
   ],

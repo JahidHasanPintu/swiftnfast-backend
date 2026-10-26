@@ -3,6 +3,7 @@ import { DatabaseSchemasModule } from 'src/database/schemas.module';
 import { CartModule } from '../cart/cart.module';
 import { CouponsModule } from '../coupons/coupons.module';
 import { NotificationModule } from '../notifications/notification.module';
+import { AdminNotificationsModule } from '../notifications/admin-notifications.module';
 import { SettingsModule } from '../settings/settings.module';
 import { StorageModule } from 'src/storage/storage.module';
 import { PreStockOrdersController } from './pre-stock-orders.controller';
@@ -14,6 +15,7 @@ import { PreStockOrdersService } from './pre-stock-orders.service';
     CartModule,
     CouponsModule,
     NotificationModule,
+    AdminNotificationsModule,
     SettingsModule,
     StorageModule,
   ],

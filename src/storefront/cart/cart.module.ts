@@ -4,6 +4,7 @@ import { StorageModule } from 'src/storage/storage.module';
 import { StorefrontAuthModule } from '../auth/storefront-auth.module';
 import { MailModule } from '../mail/mail.module';
 import { NotificationModule } from '../notifications/notification.module';
+import { AdminNotificationsModule } from '../notifications/admin-notifications.module';
 import { CouponsModule } from '../coupons/coupons.module';
 import { SettingsModule } from '../settings/settings.module';
 import { CartService } from './cart.service';
@@ -16,6 +17,7 @@ import { CartController } from './cart.controller';
     StorageModule,
     MailModule,
     NotificationModule,
+    AdminNotificationsModule,
     SettingsModule,
     CouponsModule,
   ],

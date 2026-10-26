@@ -14,6 +14,7 @@ import { MailService } from '../mail/mail.service';
 import { generateImageUrl } from '../utils/image-url.util';
 import { EventsGateway } from '../../common/gateways/events.gateway';
 import { NotificationService } from '../notifications/notification.service';
+import { AdminNotificationsService } from '../notifications/admin-notifications.service';
 import { PreStockOrdersService } from '../pre-stock-orders/pre-stock-orders.service';
 import { SettingsService } from '../settings/settings.service';
 import {
@@ -60,6 +61,7 @@ export class StorefrontOrdersService {
     private readonly mailService: MailService,
     private readonly eventsGateway: EventsGateway,
     private readonly notificationService: NotificationService,
+    private readonly adminNotifications: AdminNotificationsService,
     private readonly preStockOrdersService: PreStockOrdersService,
     private readonly settingsService: SettingsService,
     private readonly couponsService: CouponsService,
@@ -383,6 +385,16 @@ export class StorefrontOrdersService {
     await this.cartService.deleteById(body.cartId);
 
     const order = await this.findByOrderNumber(orderNumber);
+
+    await this.adminNotifications
+      .create({
+        type: 'order',
+        title: 'New order',
+        message: `${shippingName || 'Customer'} placed order ${orderNumber}`,
+        referenceId: orderNumber,
+        link: '/dashboard/orders',
+      })
+      .catch(() => undefined);
 
     // Emit real-time notification to admin
     this.eventsGateway.notifyNewOrder({

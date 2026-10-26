@@ -18,6 +18,7 @@ import { AdminModule } from './admin/admin.module';
 import { MailModule } from './mail/mail.module';
 import { SmsModule } from './sms/sms.module';
 import { NotificationModule } from './notifications/notification.module';
+import { AdminNotificationsModule } from './notifications/admin-notifications.module';
 import { AssistantModule } from '../assistant/assistant.module';
 
 @Module({
@@ -41,6 +42,7 @@ import { AssistantModule } from '../assistant/assistant.module';
     MailModule,
     SmsModule,
     NotificationModule,
+    AdminNotificationsModule,
     AssistantModule,
   ],
 })

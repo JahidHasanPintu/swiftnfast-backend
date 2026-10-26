@@ -26,6 +26,7 @@ import { CartService } from './cart.service';
 import { MailService } from '../mail/mail.service';
 import { EventsGateway } from '../../common/gateways/events.gateway';
 import { NotificationService } from '../notifications/notification.service';
+import { AdminNotificationsService } from '../notifications/admin-notifications.service';
 import {
   resolveCartItemScenario,
   NotificationScenario,
@@ -40,6 +41,7 @@ export class CartController {
     private readonly mailService: MailService,
     private readonly eventsGateway: EventsGateway,
     private readonly notificationService: NotificationService,
+    private readonly adminNotifications: AdminNotificationsService,
   ) {}
 
   private identity(req: StorefrontRequest) {
@@ -366,6 +368,16 @@ export class CartController {
     // Send price request notification to admin (non-blocking)
     const customerName = req.user?.userId || body.guestContact || 'Guest';
     this.mailService.sendPriceRequestEmail(customerName, id).catch(() => {});
+
+    await this.adminNotifications
+      .create({
+        type: 'price_request',
+        title: 'New price request',
+        message: `${customerName} requested a price quote`,
+        referenceId: id,
+        link: '/dashboard/pfu2/carts',
+      })
+      .catch(() => undefined);
 
     // Emit real-time notification to admin
     this.eventsGateway.notifyNewPriceRequest({

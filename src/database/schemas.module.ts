@@ -33,6 +33,7 @@ import Pfu2PaymentSchema from 'src/storefront/schemas/pfu2-payment.schema';
 import { PreStockOrderSchema } from 'src/storefront/schemas/pre-stock-order.schema';
 import { CouponSchema } from 'src/storefront/schemas/coupon.schema';
 import SmsLogSchema from 'src/storefront/sms/schemas/sms-log.schema';
+import { AdminNotificationSchema } from 'src/storefront/notifications/admin-notification.schema';
 
 /**
  * Single place where every Mongoose model is registered once with its
@@ -76,6 +77,7 @@ import SmsLogSchema from 'src/storefront/sms/schemas/sms-log.schema';
       { name: 'PreStockOrder', schema: PreStockOrderSchema },
       { name: 'Coupon', schema: CouponSchema },
       { name: 'SmsLog', schema: SmsLogSchema },
+      { name: 'AdminNotification', schema: AdminNotificationSchema },
     ]),
   ],
   exports: [MongooseModule],
