@@ -50,18 +50,22 @@ export class NotificationService {
     }
 
     const tasks: Promise<{ channel: 'email' | 'sms'; ok: boolean }>[] = [];
+    const enrichedCtx: NotificationContext = {
+      ...ctx,
+      ...this.productTemplateVars(ctx.productName),
+    };
 
     // ─── Email ───────────────────────────────────────────────────────────
     if (config.email.enabled && ctx.customerEmail) {
       tasks.push(
-        this.sendEmail(scenario, ctx).then((ok) => ({ channel: 'email' as const, ok })),
+        this.sendEmail(scenario, enrichedCtx).then((ok) => ({ channel: 'email' as const, ok })),
       );
     }
 
     // ─── SMS ─────────────────────────────────────────────────────────────
     if (config.sms.enabled && config.smsTemplate && ctx.customerPhone) {
       tasks.push(
-        this.sendSms(config.smsTemplate, config.smsPurpose, ctx).then((ok) => ({
+        this.sendSms(config.smsTemplate, config.smsPurpose, enrichedCtx).then((ok) => ({
           channel: 'sms' as const,
           ok,
         })),
@@ -90,6 +94,29 @@ export class NotificationService {
       return { email: 'skipped', sms: 'skipped' };
     }
     return this.notify(scenario, ctx);
+  }
+
+  /**
+   * Short, customer-safe product name for SMS/email bodies. Only the first
+   * part of a long product title is shown so the message stays readable and
+   * still identifies which item the alert is about.
+   */
+  private productTemplateVars(productName?: string): {
+    productShort: string;
+    cancelSubject: string;
+  } {
+    const raw = String(productName || '').trim();
+    const productShort = raw
+      ? raw.length > 40
+        ? `${raw.slice(0, 37)}...`
+        : raw
+      : '';
+    return {
+      productShort: productShort || 'An item in your request',
+      cancelSubject: productShort
+        ? `"${productShort}" from your order`
+        : 'Your order',
+    };
   }
 
   private async sendEmail(
@@ -122,6 +149,7 @@ export class NotificationService {
           ctx.customerName,
           ctx.status,
           ctx.totalPrice,
+          ctx.productName,
         );
         return true;
       }

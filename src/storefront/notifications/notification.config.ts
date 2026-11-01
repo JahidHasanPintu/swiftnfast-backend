@@ -96,7 +96,7 @@ export const NOTIFICATION_CONFIG: Record<
     email: { enabled: true },
     sms: { enabled: true },
     smsTemplate:
-      'Hi {{customerName}}, "{{productName}}" in your request has been cancelled."{{reasonText}}".  If you have questions, Please contact support 09678882888, 01613-333011 - PFU2',
+      'Hi {{customerName}}, "{{productShort}}" in your request has been cancelled.{{reasonText}} If you have questions, contact support 09678882888, 01613-333011 - PFU2',
     smsPurpose: 'CART_STATUS',
   },
 
@@ -113,7 +113,7 @@ export const NOTIFICATION_CONFIG: Record<
     email: { enabled: true },
     sms: { enabled: true },
     smsTemplate:
-      'Hi {{customerName}}, your order #{{orderNumber}} has been confirmed and we are processing it now. - PFU2',
+      'Hi {{customerName}}, your order has been confirmed and we are processing it now. - PFU2',
     smsPurpose: 'ORDER_STATUS',
   },
 
@@ -128,7 +128,7 @@ export const NOTIFICATION_CONFIG: Record<
     email: { enabled: true },
     sms: { enabled: true },
     smsTemplate:
-      'Your order #{{orderNumber}} has been confirmed. - PFU2',
+      'Hi {{customerName}}, your order has been confirmed. - PFU2',
     smsPurpose: 'ORDER_STATUS',
   },
 
@@ -136,7 +136,7 @@ export const NOTIFICATION_CONFIG: Record<
     email: { enabled: true },
     sms: { enabled: true },
     smsTemplate:
-      'Your order #{{orderNumber}} is now being processed. - PFU2',
+      'Hi {{customerName}}, your order is now being processed. - PFU2',
     smsPurpose: 'ORDER_STATUS',
   },
 
@@ -144,7 +144,7 @@ export const NOTIFICATION_CONFIG: Record<
     email: { enabled: true },
     sms: { enabled: true },
     smsTemplate:
-      'Your item in order #{{orderNumber}} has been purchased and is on its way to our warehouse. - PFU2',
+      'Hi {{customerName}}, your item has been purchased and is on its way to our warehouse. - PFU2',
     smsPurpose: 'ORDER_STATUS',
   },
 
@@ -152,7 +152,7 @@ export const NOTIFICATION_CONFIG: Record<
     email: { enabled: true },
     sms: { enabled: true },
     smsTemplate:
-      'Your order #{{orderNumber}} has reached our Bangladesh office and is ready for delivery. - PFU2',
+      'Hi {{customerName}}, your order has reached our Bangladesh office and is ready for delivery. - PFU2',
     smsPurpose: 'ORDER_STATUS',
   },
 
@@ -160,7 +160,7 @@ export const NOTIFICATION_CONFIG: Record<
     email: { enabled: true },
     sms: { enabled: true },
     smsTemplate:
-      'Hi {{customerName}}, great news! Your order #{{orderNumber}} has been shipped and is on its way to you. - PFU2',
+      'Hi {{customerName}}, great news! Your order has been shipped and is on its way to you. - PFU2',
     smsPurpose: 'ORDER_STATUS',
   },
 
@@ -168,7 +168,7 @@ export const NOTIFICATION_CONFIG: Record<
     email: { enabled: true },
     sms: { enabled: true },
     smsTemplate:
-      'Your order #{{orderNumber}} has been delivered successfully. Thank you for shopping with PFU2!',
+      'Hi {{customerName}}, your order has been delivered successfully. Thank you for shopping with PFU2!',
     smsPurpose: 'ORDER_STATUS',
   },
 
@@ -176,7 +176,7 @@ export const NOTIFICATION_CONFIG: Record<
     email: { enabled: true },
     sms: { enabled: true },
     smsTemplate:
-      'Your order #{{orderNumber}} has been cancelled. Please contact support if you have questions. - PFU2',
+      'Hi {{customerName}}, {{cancelSubject}} has been cancelled.{{reasonText}} Please contact support if you have questions. - PFU2',
     smsPurpose: 'ORDER_STATUS',
   },
 
@@ -191,7 +191,7 @@ export const NOTIFICATION_CONFIG: Record<
     email: { enabled: true },
     sms: { enabled: true },
     smsTemplate:
-      'Hi {{customerName}}, part of your order #{{orderNumber}} has been delivered. The remaining items will arrive soon. - PFU2',
+      'Hi {{customerName}}, part of your order has been delivered. The remaining items will arrive soon. - PFU2',
     smsPurpose: 'ORDER_STATUS',
   },
 
@@ -199,7 +199,7 @@ export const NOTIFICATION_CONFIG: Record<
     email: { enabled: true },
     sms: { enabled: true },
     smsTemplate:
-      'Hi {{customerName}}, all items in your order #{{orderNumber}} have been delivered. Thank you for shopping with PFU2!',
+      'Hi {{customerName}}, all items in your order have been delivered. Thank you for shopping with PFU2!',
     smsPurpose: 'ORDER_STATUS',
   },
 
@@ -208,7 +208,7 @@ export const NOTIFICATION_CONFIG: Record<
     email: { enabled: true },
     sms: { enabled: true },
     smsTemplate:
-      'Hi {{customerName}}, weight charges for your order #{{orderNumber}} have been applied. Check your email for the detailed breakdown. - PFU2',
+      'Hi {{customerName}}, weight charges for your order have been applied. Check your email for the detailed breakdown. - PFU2',
     smsPurpose: 'ORDER_STATUS',
   },
 
@@ -216,7 +216,7 @@ export const NOTIFICATION_CONFIG: Record<
     email: { enabled: true },
     sms: { enabled: true },
     smsTemplate:
-      'Your items for order #{{orderNumber}} have reached our US warehouse. - PFU2',
+      'Hi {{customerName}}, your items have reached our US warehouse. - PFU2',
     smsPurpose: 'ORDER_STATUS',
   },
 
@@ -224,7 +224,7 @@ export const NOTIFICATION_CONFIG: Record<
     email: { enabled: true },
     sms: { enabled: true },
     smsTemplate:
-      'Your items for order #{{orderNumber}} have reached our Bangladesh office. - PFU2',
+      'Hi {{customerName}}, your items have reached our Bangladesh office. - PFU2',
     smsPurpose: 'ORDER_STATUS',
   },
 };

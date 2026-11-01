@@ -346,7 +346,6 @@ export class MailService {
             Thank you for your order. Your order has been placed successfully.
           </p>
           <div style="background: #fff; border: 1px solid #dee2e6; border-radius: 6px; padding: 15px; margin: 20px 0;">
-            <p style="margin: 5px 0;"><strong>Order Number:</strong> ${orderNumber}</p>
             <p style="margin: 5px 0;"><strong>Total:</strong> Tk ${totalPrice}</p>
           </div>
           <p style="color: #666; font-size: 13px;">
@@ -363,7 +362,7 @@ export class MailService {
       await this.transporter.sendMail({
         from: this.from,
         to: email,
-        subject: `Order Confirmed - ${orderNumber} - PFU2`,
+        subject: `Order Confirmed - PFU2`,
         html,
       });
       this.logger.log(`Order confirmation email sent to ${email}`);
@@ -378,6 +377,7 @@ export class MailService {
     customerName: string,
     status: string,
     totalPrice?: number,
+    productName?: string,
   ): Promise<void> {
     const statusConfig: Record<string, { color: string; icon: string; message: string; title: string }> = {
       Pending: { color: '#f59e0b', icon: '⏳', title: 'Order Received', message: 'Your order has been received and is being reviewed by our team.' },
@@ -402,14 +402,16 @@ export class MailService {
 
     const config = statusConfig[status] || { color: '#6b7280', icon: '📋', title: 'Order Updated', message: `Your order status has been updated to ${status}.` };
     const trackUrl = `${this.clientUrl}/my-orders`;
-    const priceSection = totalPrice
-      ? `<div style="background: #fff; border: 1px solid #dee2e6; border-radius: 8px; padding: 15px; margin: 20px 0;">
-           <p style="margin: 5px 0; font-size: 14px; color: #555;"><strong>Order Number:</strong> ${orderNumber}</p>
-           <p style="margin: 5px 0; font-size: 14px; color: #555;"><strong>Total:</strong> Tk ${totalPrice.toLocaleString()}</p>
-         </div>`
-      : `<div style="background: #fff; border: 1px solid #dee2e6; border-radius: 8px; padding: 15px; margin: 20px 0;">
-           <p style="margin: 5px 0; font-size: 14px; color: #555;"><strong>Order Number:</strong> ${orderNumber}</p>
-         </div>`;
+    const itemRow = productName
+      ? `<p style="margin: 5px 0; font-size: 14px; color: #555;"><strong>Item:</strong> ${productName}</p>`
+      : '';
+    const totalRow = totalPrice
+      ? `<p style="margin: 5px 0; font-size: 14px; color: #555;"><strong>Total:</strong> Tk ${totalPrice.toLocaleString()}</p>`
+      : '';
+    const detailRows = `${itemRow}${totalRow}`;
+    const priceSection = detailRows
+      ? `<div style="background: #fff; border: 1px solid #dee2e6; border-radius: 8px; padding: 15px; margin: 20px 0;">${detailRows}</div>`
+      : '';
 
     const html = `
       <!DOCTYPE html>
@@ -486,7 +488,7 @@ export class MailService {
       await this.transporter.sendMail({
         from: this.from,
         to: email,
-        subject: `${config.title} - Order ${orderNumber} - PFU2`,
+        subject: `${config.title} - PFU2`,
         html,
       });
       this.logger.log(`Order status update email sent to ${email} for order ${orderNumber}`);
@@ -562,10 +564,14 @@ export class MailService {
       opts.kind === 'quote' ? 'quote' : 'cart'
     }`;
     const subjectName = productName
-      ? productName.length > 60
-        ? `${productName.slice(0, 57)}...`
+      ? productName.length > 40
+        ? `${productName.slice(0, 37)}...`
         : productName
       : 'Your item';
+    const message =
+      key === 'CANCELLED'
+        ? `"${subjectName}" in your request cannot be fulfilled and has been cancelled. The rest of your request is unaffected.`
+        : conf.message;
 
     const html = `
       <!DOCTYPE html>
@@ -599,7 +605,7 @@ export class MailService {
                 <tr>
                   <td style="padding: 25px 30px;">
                     <p style="color: #374151; font-size: 16px; margin: 0 0 10px 0;">Dear <strong>${customerName}</strong>,</p>
-                    <p style="color: #6b7280; font-size: 15px; line-height: 1.6; margin: 0 0 20px 0;">${conf.message}</p>
+                    <p style="color: #6b7280; font-size: 15px; line-height: 1.6; margin: 0 0 20px 0;">${message}</p>
                     <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; margin: 20px 0;">
                       <p style="margin: 0 0 5px 0; font-size: 14px; color: #555;"><strong>Item:</strong> ${subjectName}</p>
                     </div>

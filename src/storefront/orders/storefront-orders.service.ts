@@ -1186,6 +1186,7 @@ export class StorefrontOrdersService {
           orderNumber,
           status,
           totalPrice: doc.totalPrice,
+          productName: doc.prodDesc,
         })
         .catch((err: any) =>
           this.logger.error(
@@ -1269,6 +1270,7 @@ export class StorefrontOrdersService {
           orderNumber,
           status: body.status,
           totalPrice: candidates[0].totalPrice,
+          productName: candidates[0].prodDesc,
         })
         .catch((err: any) =>
           this.logger.error(
@@ -1315,6 +1317,14 @@ export class StorefrontOrdersService {
       )
       .exec();
 
+    const docs = await this.orderModel.find({ orderNumber }).exec();
+    const productNames = docs
+      .map((d: any) => String(d.prodDesc || '').trim())
+      .filter(Boolean);
+    const productName = productNames.length
+      ? productNames.join(', ')
+      : undefined;
+
     // Send cancellation notification
     this.notificationService
       .notifyStatusChange('Cancelled', {
@@ -1324,10 +1334,10 @@ export class StorefrontOrdersService {
         orderNumber,
         status: 'Cancelled',
         totalPrice: doc.totalPrice,
+        productName,
       })
       .catch(() => {});
 
-    const docs = await this.orderModel.find({ orderNumber }).exec();
     const grouped = await this.groupDocs(docs);
     return grouped[0];
   }

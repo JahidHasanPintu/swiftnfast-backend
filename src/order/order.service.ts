@@ -340,6 +340,7 @@ export class OrderService {
       orderNumber: (order as any).orderNumber || order.orderId,
       status: newStatus,
       totalPrice: order.totalPrice,
+      productName: (order as any).prodDesc,
     }).catch(() => {});
 
     return order;
@@ -365,6 +366,7 @@ export class OrderService {
         orderNumber: (order as any).orderNumber || order.orderId,
         status: 'Cancelled',
         totalPrice: order.totalPrice,
+        productName: (order as any).prodDesc,
       }).catch(() => {});
     }
   }
