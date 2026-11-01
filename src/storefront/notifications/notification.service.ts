@@ -150,6 +150,7 @@ export class NotificationService {
           ctx.status,
           ctx.totalPrice,
           ctx.productName,
+          ctx.productImageUrl,
         );
         return true;
       }

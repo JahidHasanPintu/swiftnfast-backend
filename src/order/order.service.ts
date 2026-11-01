@@ -23,6 +23,7 @@ import {
   buildDistinctOrderCountStages,
 } from './order.aggregations';
 import { NotificationService } from 'src/storefront/notifications/notification.service';
+import { generateImageUrl } from 'src/storefront/utils/image-url.util';
 
 @Injectable()
 export class OrderService {
@@ -30,6 +31,7 @@ export class OrderService {
     @InjectModel('Customer') private customerModel: Model<CustomerDocument>,
     @InjectModel('Orders') private orderModel: Model<OrderDocument>,
     @InjectModel('Payments') private paymentModel: Model<PaymentDocument>,
+    @InjectModel('Purchases') private purchaseModel: Model<any>,
     @InjectConnection() private readonly connection: Connection,
     private readonly notificationService: NotificationService,
   ) {}
@@ -376,6 +378,24 @@ export class OrderService {
       );
     }
 
+    // When a line is marked purchased, attach the purchase image (uploaded in
+    // the admin Purchase modal) so the customer email shows what was bought.
+    let productImageUrl: string | undefined;
+    if (newStatus === 'Purchased') {
+      const purchase = await this.purchaseModel
+        .findOne({ orderId, orderItemIndex })
+        .select('confirmationImage')
+        .lean()
+        .exec();
+      productImageUrl =
+        generateImageUrl(
+          'screenshots',
+          (purchase as any)?.confirmationImage ||
+            (order as any).productImageUrl ||
+            (order as any).ssImageUrl,
+        ) || undefined;
+    }
+
     // Send notification
     this.notificationService.notifyStatusChange(newStatus, {
       customerName: (order as any).customerName,
@@ -385,6 +405,7 @@ export class OrderService {
       status: newStatus,
       totalPrice: order.totalPrice,
       productName: (order as any).prodDesc,
+      productImageUrl,
     }).catch(() => {});
 
     return order;
@@ -412,6 +433,25 @@ export class OrderService {
     );
 
     const first = orders[0];
+    const firstItemIndex = (first as any).orderItemIndex;
+    let productImageUrl: string | undefined;
+    if (newStatus === 'Purchased' && firstItemIndex != null) {
+      const purchase = await this.purchaseModel
+        .findOne({
+          orderId,
+          orderItemIndex: firstItemIndex,
+        })
+        .select('confirmationImage')
+        .lean()
+        .exec();
+      productImageUrl =
+        generateImageUrl(
+          'screenshots',
+          (purchase as any)?.confirmationImage ||
+            (first as any).productImageUrl ||
+            (first as any).ssImageUrl,
+        ) || undefined;
+    }
     this.notificationService
       .notifyStatusChange(newStatus, {
         customerName: (first as any).customerName,
@@ -421,6 +461,7 @@ export class OrderService {
         status: newStatus,
         totalPrice: first.totalPrice,
         productName: (first as any).prodDesc,
+        productImageUrl,
       })
       .catch(() => {});
   }

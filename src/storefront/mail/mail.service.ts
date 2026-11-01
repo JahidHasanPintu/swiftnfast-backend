@@ -378,6 +378,7 @@ export class MailService {
     status: string,
     totalPrice?: number,
     productName?: string,
+    productImageUrl?: string,
   ): Promise<void> {
     const statusConfig: Record<string, { color: string; icon: string; message: string; title: string }> = {
       Pending: { color: '#f59e0b', icon: '⏳', title: 'Order Received', message: 'Your order has been received and is being reviewed by our team.' },
@@ -484,15 +485,41 @@ export class MailService {
       </body>
       </html>`;
 
+    const mailOptions = {
+      from: this.from,
+      to: email,
+      subject: `${config.title} - PFU2`,
+      html,
+    };
+    const attachments = productImageUrl
+      ? [
+          {
+            filename: 'purchased-product.jpg',
+            path: productImageUrl,
+          },
+        ]
+      : undefined;
+
     try {
-      await this.transporter.sendMail({
-        from: this.from,
-        to: email,
-        subject: `${config.title} - PFU2`,
-        html,
-      });
+      await this.transporter.sendMail({ ...mailOptions, attachments });
       this.logger.log(`Order status update email sent to ${email} for order ${orderNumber}`);
     } catch (err) {
+      // A broken/expired image URL must never block the status email itself.
+      if (attachments) {
+        try {
+          await this.transporter.sendMail(mailOptions);
+          this.logger.warn(
+            `Order status email sent to ${email} without attachment (image fetch failed)`,
+          );
+          return;
+        } catch (retryErr) {
+          this.logger.error(
+            `Failed to send order status update email to ${email}`,
+            retryErr.stack,
+          );
+          return;
+        }
+      }
       this.logger.error(`Failed to send order status update email to ${email}`, err.stack);
     }
   }
