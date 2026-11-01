@@ -958,6 +958,50 @@ export class CartService {
     };
     if (query.userId) filter.userId = query.userId;
 
+    // Free-text search across the customer record and the guest contact fields.
+    const search = String(query.search || query.q || '').trim();
+    if (search) {
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const rx = new RegExp(escaped, 'i');
+      const matches = await this.userModel
+        .find({
+          $or: [
+            { customerName: rx },
+            { emailAddress: rx },
+            { contactNumber: rx },
+            { phone: rx },
+          ],
+        })
+        .select('_id')
+        .limit(500)
+        .lean()
+        .exec();
+      const or: any[] = [{ guestContact: rx }, { guestEmail: rx }];
+      if (matches.length) {
+        or.push({ userId: { $in: matches.map((u: any) => u._id) } });
+      }
+      filter.$or = or;
+    }
+
+    // Derived status shown in the admin table: all lines cancelled -> cancelled,
+    // otherwise priced when the admin has set prices, otherwise pending.
+    const status = String(query.status || '').toLowerCase();
+    const notAllCancelled = {
+      items: { $elemMatch: { adminStatus: { $ne: 'CANCELLED' } } },
+    };
+    const allCancelled = {
+      items: { $not: { $elemMatch: { adminStatus: { $ne: 'CANCELLED' } } } },
+    };
+    if (status === 'cancelled') {
+      Object.assign(filter, allCancelled);
+    } else if (status === 'priced') {
+      Object.assign(filter, notAllCancelled, { isPriceUpdated: true });
+    } else if (status === 'pending') {
+      Object.assign(filter, notAllCancelled, {
+        isPriceUpdated: { $ne: true },
+      });
+    }
+
     const sort: Record<string, any> = { requestedAt: -1 };
     if (query.sort) {
       const [field, direction] = String(query.sort).split(':');
