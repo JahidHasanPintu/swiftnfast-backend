@@ -7,6 +7,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { CustomerDocument } from '../../order/interfaces/customer.interface';
+import { normalizePhone } from 'src/utils/phone.util';
 
 function sanitizeUser(user: any) {
   const doc = user.toObject ? user.toObject() : user;
@@ -38,6 +39,46 @@ export class StorefrontUsersService {
       throw new NotFoundException('User not found');
     }
     return sanitizeUser(user);
+  }
+
+  /**
+   * Public lookup used by checkout to prefill the form. It only answers when
+   * BOTH the email and the phone match the same customer, and returns only the
+   * fields the form needs (never credentials).
+   */
+  async lookupByEmailAndPhone(email?: string, phone?: string) {
+    const normalizedEmail = (email || '').trim().toLowerCase();
+    const normalizedPhone = normalizePhone(phone);
+    if (!normalizedEmail || !normalizedPhone) return null;
+
+    // Email is unique, so narrow by it and compare the phone canonically. This
+    // matches numbers stored with spaces or +88/880 prefixes.
+    const candidates = await this.customerModel
+      .find({
+        isDeleted: { $ne: true },
+        $expr: { $eq: [{ $toLower: '$emailAddress' }, normalizedEmail] },
+      })
+      .limit(5)
+      .exec();
+
+    const matches = candidates.filter(
+      (c) =>
+        normalizePhone(c.contactNumber) === normalizedPhone ||
+        normalizePhone(c.phone) === normalizedPhone,
+    );
+    // Prefer a real login account when duplicate customer rows exist.
+    const user =
+      matches.find((c) => !!c.password || c.isVerified === true) ||
+      matches[0];
+    if (!user) return null;
+
+    return {
+      name: user.customerName || '',
+      email: user.emailAddress || '',
+      phone: user.contactNumber || user.phone || '',
+      shippingAddress: user.shippingAddress || user.address || '',
+      district: user.districtName || '',
+    };
   }
 
   async updateProfile(userId: string, body: any) {

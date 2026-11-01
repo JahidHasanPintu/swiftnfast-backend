@@ -357,7 +357,14 @@ export class PaymentService {
               paymentMethod: orderData.paymentMethod || 'bkash',
               advancePaymentData: {
                 trxID: data.trxID,
-                amount: paymentRecord?.amount ? parseFloat(paymentRecord.amount) : 0,
+                // The gateway is charged the amount plus its fee; only the
+                // portion that goes toward the order is recorded as advance.
+                amount:
+                  orderData.advanceAmount != null
+                    ? Number(orderData.advanceAmount)
+                    : paymentRecord?.amount
+                      ? parseFloat(paymentRecord.amount)
+                      : 0,
                 paymentID: paymentID,
               },
             });

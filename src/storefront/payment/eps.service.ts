@@ -413,6 +413,16 @@ export class EpsService {
         if (paymentRecord?.pendingOrderData && !orderId) {
           try {
             const orderData = paymentRecord.pendingOrderData;
+            // The gateway is charged the amount plus its fee; only the portion
+            // that goes toward the order should be recorded as advance.
+            const paidTowardOrder =
+              orderData.advanceAmount != null
+                ? Number(orderData.advanceAmount)
+                : Number(
+                    paymentRecord?.amount
+                      ? parseFloat(paymentRecord.amount)
+                      : parseFloat(amount || '0'),
+                  );
             const orderResult =
               await this.storefrontOrdersService.createPreStockOrder({
                 userId: orderData.userId,
@@ -425,11 +435,7 @@ export class EpsService {
                 paymentMethod: orderData.paymentMethod || 'eps',
                 advancePaymentData: {
                   trxID: epsTransactionId,
-                  amount: Number(
-                    paymentRecord?.amount
-                      ? parseFloat(paymentRecord.amount)
-                      : parseFloat(amount || '0'),
-                  ),
+                  amount: paidTowardOrder,
                   paymentID: paymentRecord?.paymentId,
                 },
               });

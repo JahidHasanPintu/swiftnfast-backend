@@ -224,6 +224,50 @@ export class OrderService {
     return this.findOrCreateCustomer(info, session);
   }
 
+  /**
+   * Finds the customer record that matches BOTH the email and the phone
+   * number. Used when a shopper checks out without being signed in: if the
+   * details belong to an existing customer, the order is linked to that
+   * account so it shows up in their order history.
+   *
+   * Phone numbers are compared in their canonical form (and the common
+   * +88/88 variants) because the same person may type them differently.
+   */
+  async findAccountByEmailAndPhone(
+    email?: string,
+    phone?: string,
+  ): Promise<CustomerDocument | null> {
+    const normalizedEmail = (email || '').trim().toLowerCase();
+    const normalizedPhone = normalizePhone(phone);
+    if (!normalizedEmail || !normalizedPhone) return null;
+
+    // Email is unique on the customer collection, so narrow by it first and
+    // then compare the phone in canonical form. This tolerates stored numbers
+    // written with spaces, +88, or 880 prefixes.
+    const candidates = await this.customerModel
+      .find({
+        isDeleted: { $ne: true },
+        $expr: { $eq: [{ $toLower: '$emailAddress' }, normalizedEmail] },
+      })
+      .limit(5)
+      .exec();
+
+    const matches = candidates.filter(
+      (c) =>
+        normalizePhone(c.contactNumber) === normalizedPhone ||
+        normalizePhone(c.phone) === normalizedPhone,
+    );
+
+    // Older data can contain duplicate customer rows for the same email.
+    // Prefer the one that is actually a login account (has a password or is
+    // verified) so the order lands in the account the shopper can sign in to.
+    return (
+      matches.find((c) => !!c.password || c.isVerified === true) ||
+      matches[0] ||
+      null
+    );
+  }
+
   generateStorefrontOrderNumber(): string {
     const timestamp = Date.now();
     const random = Math.floor(Math.random() * 900) + 100;

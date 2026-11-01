@@ -98,6 +98,52 @@ export class StorefrontOrdersService {
       (item: any) => item.adminStatus !== 'CANCELLED',
     );
 
+    const shipping = body.shipping || cart.shippingAddress || {};
+    const shippingName = shipping.name;
+    const shippingPhone =
+      shipping.phone || body.guestContact || cart.guestContact;
+    // Quote guests leave their email on the price request; keep it as the
+    // last fallback so order notifications always have a reachable address.
+    const shippingEmail =
+      shipping.email || body.guestEmail || cart.guestEmail;
+    const shippingAddressText = shipping.shippingAddress || shipping.address;
+    const shippingDistrict = shipping.district || shipping.districtName;
+
+    // A shopper who is not signed in can still be linked to an existing
+    // account when both the email and the phone match. That is what makes a
+    // guest checkout appear in the customer's order history.
+    const hasUserId =
+      !!body.userId && mongoose.Types.ObjectId.isValid(String(body.userId));
+    const linkedAccount = hasUserId
+      ? null
+      : await this.ordersService.findAccountByEmailAndPhone(
+          shippingEmail,
+          shippingPhone,
+        );
+    const resolvedUserId = hasUserId
+      ? String(body.userId)
+      : linkedAccount
+        ? String(linkedAccount._id)
+        : undefined;
+
+    if (linkedAccount) {
+      // Keep the canonical customer record fresh with what was typed here.
+      if (shippingName) linkedAccount.customerName = shippingName;
+      if (shippingEmail) linkedAccount.emailAddress = shippingEmail;
+      if (shippingAddressText) {
+        linkedAccount.shippingAddress = shippingAddressText;
+      }
+      if (shippingDistrict) linkedAccount.districtName = shippingDistrict;
+      await linkedAccount.save();
+    }
+
+    // Pass the resolved account id down both order paths (ready-stock and
+    // import) so the order is attributed to that customer.
+    const orderBody =
+      resolvedUserId && resolvedUserId !== body.userId
+        ? { ...body, userId: resolvedUserId, isGuest: false }
+        : body;
+
     // Cart and quote are separate documents, so `kind` is the authority here.
     // The item check stays as a guard for rows written before `kind` existed.
     // quote -> old Orders collection (orderType 'import')
@@ -107,7 +153,7 @@ export class StorefrontOrdersService {
       rawItems.some((item: any) => item.type === 'outside_order');
     if (!hasOutsideProducts && rawItems.length > 0) {
       // Ready-stocked products -> prestockorders collection
-      return this.preStockOrdersService.createOrder(body);
+      return this.preStockOrdersService.createOrder(orderBody);
     }
     // Every line was cancelled (or the cart was already empty): there is
     // nothing left to order.
@@ -118,31 +164,22 @@ export class StorefrontOrdersService {
     // Outside products → old Orders collection
     const orderNumber = this.ordersService.generateStorefrontOrderNumber();
 
-    const shipping = body.shipping || cart.shippingAddress || {};
-    const shippingName = shipping.name;
-    const shippingPhone =
-      shipping.phone || body.guestContact || cart.guestContact;
-    // Quote guests leave their email on the price request; keep it as the
-    // last fallback so order notifications always have a reachable address.
-    const shippingEmail =
-      shipping.email || body.guestEmail || cart.guestEmail;
-    const shippingAddressText = shipping.shippingAddress || shipping.address;
+    const customer =
+      linkedAccount ||
+      (await this.ordersService.findOrCreateCustomerByContact(
+        shippingPhone || `GUEST-${Date.now()}`,
+        {
+          name: shippingName,
+          email: shippingEmail,
+          shippingAddress: shippingAddressText,
+          districtName: shippingDistrict,
+          sourceOfOrder: 'prestock-storefront',
+        },
+      ));
 
-    const customer = await this.ordersService.findOrCreateCustomerByContact(
-      shippingPhone || `GUEST-${Date.now()}`,
-      {
-        name: shippingName,
-        email: shippingEmail,
-        shippingAddress: shippingAddressText,
-        districtName: shipping.district || shipping.districtName,
-        sourceOfOrder: 'prestock-storefront',
-      },
-    );
-
-    const userId =
-      body.userId && mongoose.Types.ObjectId.isValid(String(body.userId))
-        ? new mongoose.Types.ObjectId(body.userId)
-        : undefined;
+    const userId = resolvedUserId
+      ? new mongoose.Types.ObjectId(resolvedUserId)
+      : undefined;
 
     const lineItems = [];
     const ratesCache: Record<string, number> = {};
@@ -308,13 +345,18 @@ export class StorefrontOrdersService {
         : 'pending';
 
       // Split the advance payment across line items in proportion to their share
-      // of the amount actually payable.
+      // of the amount actually payable. The last line absorbs the rounding
+      // remainder - it must subtract everything already allocated, not the
+      // line's own (still zero) advance, otherwise the last line repeats the
+      // whole payment and the order's total advance overshoots what was paid.
+      let advanceAllocated = 0;
       const paymentBulk = lineItems.map((item, idx) => {
         const paid = isFreeOrder
           ? 0
           : idx === lineItems.length - 1
-          ? toFixed2(advanceAmount - item.advancePayment)
+          ? toFixed2(advanceAmount - advanceAllocated)
           : toFixed2(advanceAmount * (item.payableTotal / payableTotal));
+        advanceAllocated = toFixed2(advanceAllocated + paid);
         const remaining = toFixed2(item.payableTotal - paid);
         item.advancePayment = paid;
         item.remainingAmount = remaining;
