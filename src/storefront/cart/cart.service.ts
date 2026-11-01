@@ -543,6 +543,7 @@ export class CartService {
        */
       taxAmount?: number | null;
       shippingCost?: number;
+      productSourcedFrom?: string;
       updatedBy?: string;
     },
   ) {
@@ -595,6 +596,9 @@ export class CartService {
     }
     if (body.shippingCost !== undefined) {
       items[idx].shippingCost = toFixed2(Number(body.shippingCost));
+    }
+    if (body.productSourcedFrom !== undefined) {
+      items[idx].productSourcedFrom = body.productSourcedFrom;
     }
     if (body.updatedBy) {
       cart.updatedBy = body.updatedBy;
