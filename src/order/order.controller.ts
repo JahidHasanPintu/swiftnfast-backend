@@ -144,6 +144,16 @@ export class OrderController {
     );
   }
 
+  // update the status of every line in an order (order-level status)
+  @Put(':orderId/status/:newStatus')
+  async updateOrderStatusByOrderId(
+    @Param('orderId') orderId: string,
+    @Param('newStatus') newStatus: string,
+  ) {
+    await this.orderService.updateOrderStatusByOrderId(orderId, newStatus);
+    return { success: true, message: `Status updated to ${newStatus}` };
+  }
+
   // bulk cancel of orders
 
   @Put('bulk-cancel/:orderId')

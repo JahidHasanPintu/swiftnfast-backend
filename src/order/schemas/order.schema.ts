@@ -69,6 +69,8 @@ export const OrderSchema = new mongoose.Schema(
         'CONFIRMED',
         'PROCESSING',
         'USWAREHOUSE',
+        'CARGO',
+        'DHAKAAIRPORT',
         'BDOFFICE',
         'SHIPPED',
         'PARTIAL_DELIVERED',

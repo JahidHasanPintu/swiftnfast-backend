@@ -25,6 +25,8 @@ export type NotificationScenario =
   | 'STATUS_FULL_DELIVERED'
   | 'WEIGHT_CHARGED'
   | 'USWAREHOUSE'
+  | 'CARGO'
+  | 'DHAKAAIRPORT'
   | 'BDOFFICE';
 
 export interface NotificationChannel {
@@ -61,6 +63,8 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: 'Order Cancelled',
   stockout: 'Item Out of Stock',
   USWAREHOUSE: 'Reached US Warehouse',
+  CARGO: 'Cargo Dispatched',
+  DHAKAAIRPORT: 'Reached Dhaka Airport',
   BDOFFICE: 'Reached Bangladesh Office',
 };
 
@@ -220,6 +224,22 @@ export const NOTIFICATION_CONFIG: Record<
     smsPurpose: 'ORDER_STATUS',
   },
 
+  CARGO: {
+    email: { enabled: true },
+    sms: { enabled: true },
+    smsTemplate:
+      'Hi {{customerName}}, your order has been dispatched as cargo and is on the way to Dhaka. - PFU2',
+    smsPurpose: 'ORDER_STATUS',
+  },
+
+  DHAKAAIRPORT: {
+    email: { enabled: true },
+    sms: { enabled: true },
+    smsTemplate:
+      'Hi {{customerName}}, your order has reached Dhaka Airport and is being processed. - PFU2',
+    smsPurpose: 'ORDER_STATUS',
+  },
+
   BDOFFICE: {
     email: { enabled: true },
     sms: { enabled: true },
@@ -254,6 +274,8 @@ export function resolveScenario(status: string): NotificationScenario | null {
     cancelled: 'STATUS_CANCELLED',
     stockout: 'STATUS_STOCKOUT',
     USWAREHOUSE: 'USWAREHOUSE',
+    CARGO: 'CARGO',
+    DHAKAAIRPORT: 'DHAKAAIRPORT',
     BDOFFICE: 'BDOFFICE',
   };
   return map[status] || null;

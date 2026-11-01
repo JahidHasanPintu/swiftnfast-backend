@@ -390,6 +390,41 @@ export class OrderService {
     return order;
   }
 
+  // Update every line of an order so the order-level status shown to the
+  // customer (and used by the track-order stepper) changes as one unit.
+  async updateOrderStatusByOrderId(
+    orderId: string,
+    newStatus: string,
+  ): Promise<void> {
+    const orders = await this.orderModel.find({ orderId }).exec();
+    if (!orders.length) {
+      throw new NotFoundException(`Order with orderId ${orderId} not found.`);
+    }
+
+    await this.orderModel.updateMany(
+      { orderId },
+      {
+        $set: {
+          status: newStatus,
+          isPurchased: newStatus === 'Purchased',
+        },
+      },
+    );
+
+    const first = orders[0];
+    this.notificationService
+      .notifyStatusChange(newStatus, {
+        customerName: (first as any).customerName,
+        customerEmail: (first as any).guestEmail,
+        customerPhone: first.contactNo,
+        orderNumber: (first as any).orderNumber || first.orderId,
+        status: newStatus,
+        totalPrice: first.totalPrice,
+        productName: (first as any).prodDesc,
+      })
+      .catch(() => {});
+  }
+
   // bulk cancel of orders
 
   async updateBulkStatusOrder(orderId: string): Promise<void> {

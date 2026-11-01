@@ -1082,6 +1082,8 @@ export class StorefrontOrdersService {
       'confirmed',
       'processing',
       'uswarehouse',
+      'cargo',
+      'dhakaairport',
       'bdoffice',
       'partial_delivered',
     ];

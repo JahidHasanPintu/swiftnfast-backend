@@ -443,6 +443,8 @@ export class PathaoService {
         'CONFIRMED',
         'PROCESSING',
         'USWAREHOUSE',
+        'CARGO',
+        'DHAKAAIRPORT',
         'BDOFFICE',
       ]);
       // The order only flips to SHIPPED once every line has left the building;
