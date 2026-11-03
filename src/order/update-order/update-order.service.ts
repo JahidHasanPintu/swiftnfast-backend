@@ -52,14 +52,24 @@ export class UpdateOrderService {
       if (orderById) {
         resolvedOrderId = orderById.orderId as string;
       } else {
-        // Try to find orders whose customerId matches (case c)
-        const orderByCustomer = await this.orderModel
-          .findOne({ customerId: orderId })
+        // Fall back to a customer _id, but only when it maps to exactly one
+        // order. Customers are reused across orders, so picking an arbitrary
+        // order here would edit the wrong order.
+        const customerOrderIds = await this.orderModel
+          .distinct('orderId', { customerId: orderId })
           .exec();
 
-        if (orderByCustomer) {
-          resolvedOrderId = orderByCustomer.orderId as string;
+        if (customerOrderIds.length === 0) {
+          throw new NotFoundException(`No orders found for id: ${orderId}`);
         }
+
+        if (customerOrderIds.length > 1) {
+          throw new BadRequestException(
+            `Customer ${orderId} has multiple orders; provide the orderId instead`,
+          );
+        }
+
+        resolvedOrderId = customerOrderIds[0];
       }
     }
 
@@ -91,6 +101,20 @@ export class UpdateOrderService {
     }
 
     // ── 5. Sync order items ──────────────────────────────────────────────────
+    // Fields that describe the order as a whole live on every order line, so
+    // they must be applied from the payload rather than inherited from the
+    // (shared, possibly stale) customer record.
+    const orderLevelFields: Record<string, any> = {};
+    if (updateDto.customerInfo?.orderDate !== undefined) {
+      orderLevelFields.orderDate = updateDto.customerInfo.orderDate;
+    }
+    if (updateDto.customerInfo?.createdBy !== undefined) {
+      orderLevelFields.createdBy = updateDto.customerInfo.createdBy;
+    }
+    if (updateDto.customerInfo?.customerName !== undefined) {
+      orderLevelFields.customerName = updateDto.customerInfo.customerName;
+    }
+
     const incomingIndexes: number[] = updateDto.orders.map((o: any) =>
       Number(o.orderItemIndex),
     );
@@ -123,21 +147,59 @@ export class UpdateOrderService {
           .findByIdAndUpdate(existingItem._id, { $set: merged }, { new: true })
           .exec();
       } else {
-        // Create a brand-new order item linked by orderId + customerId
+        // Create a brand-new order item linked by orderId + customerId. Use the
+        // edited order's own date/creator, never the customer's first-order
+        // values.
         await this.orderModel.create({
           ...orderUpdate,
           orderId,
           customerId: mongoCustomerId,
-          customerName: existingCustomer.customerName,
-          orderDate: existingCustomer.orderDate,
-          createdBy: existingCustomer.createdBy,
+          customerName:
+            orderLevelFields.customerName ?? existingCustomer.customerName,
+          orderDate: orderLevelFields.orderDate ?? existingOrders[0].orderDate,
+          createdBy: orderLevelFields.createdBy ?? existingOrders[0].createdBy,
           orderItemIndex: itemIndex,
           status: orderUpdate.status ?? 'Pending',
         });
       }
     }
 
-    // ── 6. Update customer properties ────────────────────────────────────────
+    // Apply the order-level fields to every line of this order (including
+    // items that already existed before the edit).
+    if (Object.keys(orderLevelFields).length > 0) {
+      await this.orderModel
+        .updateMany({ orderId }, { $set: orderLevelFields })
+        .exec();
+    }
+
+    // ── 6. Keep the customer's aggregate totals in sync ──────────────────────
+    // A customer record is shared by all of their orders, so it must not be
+    // overwritten with the totals of the single order being edited.
+    const customerOrders: OrderDocument[] = await this.orderModel
+      .find({ customerId: mongoCustomerId })
+      .exec();
+
+    const customerGrandTotal = customerOrders.reduce(
+      (sum, order) =>
+        sum +
+        (order.totalPrice || (order.uniPrice || 0) * (order.quantity || 0)),
+      0,
+    );
+    const customerTotalAdvance = customerOrders.reduce(
+      (sum, order) => sum + (order.advancePayment || 0),
+      0,
+    );
+
+    if (
+      existingCustomer.grandTotal !== customerGrandTotal ||
+      existingCustomer.totalAdvance !== customerTotalAdvance
+    ) {
+      existingCustomer.grandTotal = customerGrandTotal;
+      existingCustomer.totalAdvance = customerTotalAdvance;
+      await existingCustomer.save();
+    }
+
+    // ── 7. Update customer properties ────────────────────────────────────────
     if (updateDto.customerInfo) {
       await this.updateCustomerProperties(
         existingCustomer,
@@ -145,7 +207,7 @@ export class UpdateOrderService {
       );
     }
 
-    // ── 7. Upsert payment record ─────────────────────────────────────────────
+    // ── 8. Upsert payment record ─────────────────────────────────────────────
     let paymentResult: any = null;
     if (updateDto.payments) {
       const existingPayment: PaymentDocument | null = await this.paymentModel
@@ -169,7 +231,7 @@ export class UpdateOrderService {
       }
     }
 
-    // ── 8. Return updated state ──────────────────────────────────────────────
+    // ── 9. Return updated state ──────────────────────────────────────────────
     const updatedOrders = await this.orderModel
       .find({ orderId })
       .sort({ orderItemIndex: 1 })
@@ -193,10 +255,9 @@ export class UpdateOrderService {
       'emailAddress',
       'shippingAddress',
       'districtName',
-      'totalAdvance',
-      'grandTotal',
       'sourceOfOrder',
       'customerDateOfBirth',
+      'customerJoiningDate',
     ];
 
     let changed = false;

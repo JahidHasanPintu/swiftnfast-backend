@@ -507,22 +507,31 @@ export class OrderService {
       throw new NotFoundException('Order not found');
     }
 
+    let customer: CustomerDocument | null = null;
+
     if (order.customerId) {
-      const customer = await this.customerModel
+      customer = await this.customerModel
         .findOne({ _id: order.customerId })
         .exec();
-      if (customer) {
-        return customer;
-      }
     }
 
-    const customer = await this.customerModel.findOne({ orderId }).exec();
+    if (!customer) {
+      customer = await this.customerModel.findOne({ orderId }).exec();
+    }
 
     if (!customer) {
       throw new NotFoundException('Customer not found');
     }
 
-    return customer;
+    // The customer record is shared across all of their orders, so its
+    // orderDate/createdBy may belong to a different order. Overlay the values
+    // from the order being viewed.
+    return {
+      ...customer.toObject(),
+      orderId: order.orderId,
+      orderDate: order.orderDate ?? customer.orderDate,
+      createdBy: order.createdBy ?? customer.createdBy,
+    } as CustomerDocument;
   }
 
   // get customer with customer id
