@@ -46,6 +46,10 @@ export class UpdatePurchaseDto {
   @IsString()
   deliveryDate: string;
 
+  @IsOptional()
+  @IsString()
+  deliveryMethod: string;
+
   // In dto/updatePurchase.dto.ts — add to existing class:
   recipientAddress?: string;
   recipientPhone?: string;

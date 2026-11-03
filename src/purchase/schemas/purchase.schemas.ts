@@ -65,7 +65,7 @@ export const PurchaseSchema = new mongoose.Schema(
     deliveryDate: { type: Date },
     deliveryMethod: {
       type: String,
-      default: 'Office Pickup',
+      default: 'Pathao',
       enum: ['Office Pickup', 'Pathao'],
     },
     pathaoConsignmentId: { type: String },

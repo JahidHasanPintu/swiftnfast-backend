@@ -529,12 +529,16 @@ export class PurchaseService {
   ): Promise<PurchaseDocument> {
     const query = { orderId, orderItemIndex };
 
-    const update = {
-      $set: {
-        deliveryDate: new Date(),
-        status: updatePurchaseDto.status,
-      },
+    const setFields: Record<string, any> = {
+      deliveryDate: new Date(),
+      status: updatePurchaseDto.status,
     };
+
+    if (updatePurchaseDto.deliveryMethod) {
+      setFields.deliveryMethod = updatePurchaseDto.deliveryMethod;
+    }
+
+    const update = { $set: setFields };
 
     const updateOrder = {
       $set: { status: 'Delivered' },
