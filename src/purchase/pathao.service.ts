@@ -47,65 +47,6 @@ export class PathaoService {
     });
   }
 
-  // ── Delivery charge (Price Plan) ──────────────────────────────────────
-  // Falls back to a static tariff when Pathao is unreachable/unconfigured.
-  private staticDeliveryCharge(weight: number): number {
-    const base = Number(process.env.PATHAO_FALLBACK_BASE_CHARGE ?? 80);
-    const perKg = Number(process.env.PATHAO_FALLBACK_PER_KG_CHARGE ?? 20);
-    const billableKg = Math.max(1, Math.ceil(weight));
-    return base + (billableKg - 1) * perKg;
-  }
-
-  async calculateDeliveryCharge(rawWeight: number): Promise<number> {
-    const weight = Math.min(10, Math.max(0.5, Number(rawWeight) || 0.5));
-
-    try {
-      const res = await this.pathaoPost(
-        '/aladdin/api/v1/merchant/price-plan',
-        {
-          store_id: Number(process.env.PATHAO_STORE_ID),
-          item_type: 2,
-          delivery_type: 48,
-          item_weight: weight,
-          recipient_city: 1,
-          recipient_zone: 1,
-        },
-      );
-
-      const data = res?.data?.data || {};
-      const price = Number(data.final_price ?? data.price);
-
-      if (Number.isFinite(price) && price > 0) {
-        return price;
-      }
-
-      return this.staticDeliveryCharge(weight);
-    } catch (err: any) {
-      this.logger.warn(
-        `Pathao price-plan failed, using static tariff: ${
-          err?.response?.data?.message || err?.message || err
-        }`,
-      );
-      return this.staticDeliveryCharge(weight);
-    }
-  }
-
-  async calculateDeliveryCharges(weights: number[]): Promise<{
-    charges: number[];
-    total: number;
-  }> {
-    const charges: number[] = [];
-
-    for (const weight of weights) {
-      charges.push(await this.calculateDeliveryCharge(weight));
-    }
-
-    return {
-      charges,
-      total: charges.reduce((sum, charge) => sum + charge, 0),
-    };
-  }
-
   // ── Validate a purchase has everything Pathao needs ───────────────────
 
   private validateForPathao(purchase: any, label: string): string[] {

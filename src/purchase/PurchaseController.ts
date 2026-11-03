@@ -196,16 +196,6 @@ export class PurchaseController {
 
   // PAthao:
 
-  @Post('pathao/delivery-charge')
-  async calculatePathaoDeliveryCharge(
-    @Body() body: { weights?: number[] },
-  ) {
-    const weights = Array.isArray(body?.weights) ? body.weights : [];
-    return this.pathaoService.calculateDeliveryCharges(
-      weights.map((weight) => Number(weight) || 0),
-    );
-  }
-
   @Post('pathao/single/:orderId/:orderItemIndex')
   async createPathaoSingleDelivery(
     @Param('orderId') orderId: string,
