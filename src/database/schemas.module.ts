@@ -25,6 +25,7 @@ import BannerSchema from 'src/storefront/schemas/banner.schema';
 import FaqSchema from 'src/storefront/schemas/faq.schema';
 import PartnerSchema from 'src/storefront/schemas/partner.schema';
 import SettingSchema from 'src/storefront/schemas/setting.schema';
+import AnalyticsSettingSchema from 'src/storefront/schemas/analytics-setting.schema';
 import CartSchema from 'src/storefront/schemas/cart.schema';
 import PaymentMethodSchema from 'src/storefront/schemas/payment-method.schema';
 import Pfu2ShippingAddressSchema from 'src/storefront/schemas/pfu2-shipping-address.schema';
@@ -69,6 +70,7 @@ import { AdminNotificationSchema } from 'src/storefront/notifications/admin-noti
       { name: 'Faq', schema: FaqSchema },
       { name: 'Partner', schema: PartnerSchema },
       { name: 'Setting', schema: SettingSchema },
+      { name: 'AnalyticsSetting', schema: AnalyticsSettingSchema },
       { name: 'Cart', schema: CartSchema },
       { name: 'PaymentMethod', schema: PaymentMethodSchema },
       { name: 'Pfu2ShippingAddress', schema: Pfu2ShippingAddressSchema },

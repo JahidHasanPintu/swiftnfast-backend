@@ -6,6 +6,7 @@ import { BannerModule } from './banner/banner.module';
 import { FaqsModule } from './faqs/faqs.module';
 import { PartnersModule } from './partners/partners.module';
 import { SettingsModule } from './settings/settings.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { StorefrontUsersModule } from './users/storefront-users.module';
 import { CartModule } from './cart/cart.module';
 import { CouponsModule } from './coupons/coupons.module';
@@ -30,6 +31,7 @@ import { AssistantModule } from '../assistant/assistant.module';
     FaqsModule,
     PartnersModule,
     SettingsModule,
+    AnalyticsModule,
     StorefrontUsersModule,
     CartModule,
     CouponsModule,
