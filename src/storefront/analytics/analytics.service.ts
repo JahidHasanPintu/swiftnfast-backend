@@ -14,6 +14,9 @@ const BOOLEAN_FIELDS = [
 
 const STRING_FIELDS = [
   'gaMeasurementId',
+  'gaPropertyId',
+  'gaServiceAccountEmail',
+  'gaServiceAccountPrivateKey',
   'gtmContainerId',
   'clarityProjectId',
   'facebookPixelId',
@@ -25,6 +28,9 @@ export interface AnalyticsConfig {
   enabled: boolean;
   gaEnabled: boolean;
   gaMeasurementId: string;
+  gaPropertyId: string;
+  gaServiceAccountEmail: string;
+  gaServiceAccountPrivateKey: string;
   gtmEnabled: boolean;
   gtmContainerId: string;
   clarityEnabled: boolean;
@@ -48,6 +54,9 @@ export class AnalyticsService {
       enabled: true,
       gaEnabled: false,
       gaMeasurementId: '',
+      gaPropertyId: '',
+      gaServiceAccountEmail: '',
+      gaServiceAccountPrivateKey: '',
       gtmEnabled: false,
       gtmContainerId: '',
       clarityEnabled: false,
@@ -72,6 +81,15 @@ export class AnalyticsService {
       enabled: bool(doc.enabled, base.enabled),
       gaEnabled: bool(doc.gaEnabled, base.gaEnabled),
       gaMeasurementId: str(doc.gaMeasurementId, base.gaMeasurementId),
+      gaPropertyId: str(doc.gaPropertyId, base.gaPropertyId),
+      gaServiceAccountEmail: str(
+        doc.gaServiceAccountEmail,
+        base.gaServiceAccountEmail,
+      ),
+      gaServiceAccountPrivateKey:
+        typeof doc.gaServiceAccountPrivateKey === 'string'
+          ? doc.gaServiceAccountPrivateKey
+          : base.gaServiceAccountPrivateKey,
       gtmEnabled: bool(doc.gtmEnabled, base.gtmEnabled),
       gtmContainerId: str(doc.gtmContainerId, base.gtmContainerId),
       clarityEnabled: bool(doc.clarityEnabled, base.clarityEnabled),

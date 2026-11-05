@@ -13,6 +13,12 @@ export const AnalyticsSettingSchema = new mongoose.Schema(
     gaEnabled: { type: Boolean, default: false },
     gaMeasurementId: { type: String, default: '', trim: true },
 
+    // Google Analytics 4 Data API (server-side reporting). The property ID is
+    // the numeric GA4 property, not the G- measurement ID above.
+    gaPropertyId: { type: String, default: '', trim: true },
+    gaServiceAccountEmail: { type: String, default: '', trim: true },
+    gaServiceAccountPrivateKey: { type: String, default: '' },
+
     gtmEnabled: { type: Boolean, default: false },
     gtmContainerId: { type: String, default: '', trim: true },
 
